@@ -117,7 +117,7 @@ describe("parseDraftSuggestions", () => {
     const [suggestion] = parseDraftSuggestions({ items: [{ kind: "transfer", account: "Bank", transferAccount: "消失的帳戶", amount: 100 }] }, accounts, categories, today);
 
     expect(suggestion.ok).toBe(false);
-    expect(suggestion.issues.join(" ")).toContain("轉帳目標帳戶");
+    expect(suggestion.issues.join(" ")).toContain("目標帳戶");
   });
 
   test("handles mixed items independently", () => {

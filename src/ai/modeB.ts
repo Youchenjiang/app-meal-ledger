@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { createTransactionDraft, type DraftForm, type TransactionDraft } from "../appShell/drafts";
 import type { AiEntityPolicy } from "./entityPolicy";
 import type { AiLedgerAccounts, NewEntityCarrier } from "./parse";
@@ -10,27 +11,15 @@ export type ModeBField = "date" | "kind" | "account" | "transferAccount" | "cate
 
 export const MODE_B_FIELDS: ModeBField[] = ["date", "kind", "account", "category", "counterparty", "itemName", "amount"];
 
-export const MODE_B_FIELD_LABELS: Record<ModeBField, string> = {
-  date: "日期",
-  kind: "類型",
-  account: "帳戶",
-  transferAccount: "轉帳目標",
-  category: "類別",
-  counterparty: "對象",
-  itemName: "品項",
-  amount: "金額",
-};
+// Field labels and speech prompts resolve through the copy dictionary at call
+// time so they follow the selected locale (keys ai.field.* / ai.prompt.*).
+export function modeBFieldLabel(field: ModeBField): string {
+  return t(`ai.field.${field}`);
+}
 
-export const MODE_B_FIELD_PROMPTS: Record<ModeBField, string> = {
-  date: "請說日期(例如:七月二十五、7/25、昨天)",
-  kind: "請說類型(支出、收入或轉帳)",
-  account: "請說帳戶名稱",
-  transferAccount: "請說轉帳目標帳戶名稱",
-  category: "請說類別",
-  counterparty: "請說對象或店家",
-  itemName: "請說品項",
-  amount: "請說金額(例如:兩百五十、480)",
-};
+export function modeBFieldPrompt(field: ModeBField): string {
+  return t(`ai.prompt.${field}`);
+}
 
 // The step sequence for the current kind: transfers add a destination step
 // and drop the category step.
@@ -75,7 +64,7 @@ export function buildFieldCorrectionSystemPrompt(field: ModeBField, context: Mod
     "你是記帳助理。把使用者的口語輸入轉成單一欄位的正確格式。",
     "只能回傳 JSON,不要任何其他文字或 markdown。",
     '回傳格式: {"value":"欄位值"}',
-    `目前欄位: ${MODE_B_FIELD_LABELS[field]}`,
+    `目前欄位: ${modeBFieldLabel(field)}`,
     fieldRule,
     "無法判斷時 value 回空字串,不要編造。",
   ].join("\n");
@@ -157,13 +146,13 @@ function resolveAccountField(
 ): { name: string; currency: string } | null {
   const trimmed = raw.trim();
   if (!trimmed) {
-    issues.push(`${label}為空白。`);
+    issues.push(t("validation.fieldBlank", { label }));
     return null;
   }
   const matched = matchAccountName(trimmed, accounts);
   if (matched) return matched;
   if (policy.account === "existing") {
-    issues.push(`${label}「${trimmed}」不存在。`);
+    issues.push(t("validation.entityMissing", { label, name: trimmed }));
     return null;
   }
   newEntities[entityKey] = trimmed;
@@ -181,13 +170,13 @@ function resolveCategoryField(
 ): string {
   const trimmed = raw.trim();
   if (!trimmed) {
-    issues.push("類別為空白。");
+    issues.push(t("validation.fieldBlank", { label: t("field.category") }));
     return "";
   }
   const matched = matchCategoryName(trimmed, categories);
   if (matched) return matched;
   if (policy.category === "existing") {
-    issues.push(`類別「${trimmed}」不存在。`);
+    issues.push(t("validation.entityMissing", { label: t("field.category"), name: trimmed }));
     return "";
   }
   newEntities.newCategory = trimmed;
@@ -289,14 +278,14 @@ export function buildModeBDraft(
 
   const amount = values.amount?.trim() ?? "";
   if (!amount) {
-    issues.push("金額為空白。");
+    issues.push(t("validation.fieldBlank", { label: t("field.amount") }));
   }
   const rawDate = values.date?.trim() ?? "";
   const date = parseSpokenDate(rawDate, today) ?? "";
   if (!rawDate) {
-    issues.push("日期為空白。");
+    issues.push(t("validation.fieldBlank", { label: t("field.date") }));
   } else if (!date) {
-    issues.push(`日期「${rawDate}」無法辨識,請用 YYYY-MM-DD、7/25、七月二十五或今天/昨天等說法。`);
+    issues.push(t("validation.dateUnparsable", { value: rawDate }));
   }
 
   if (issues.length > 0 || !sourceAccount) {
@@ -350,7 +339,7 @@ export function buildModeBDraft(
   }
   const draft = createTransactionDraft(form, `mode-b-${crypto.randomUUID()}`, [...accounts, ...syntheticAccounts]);
   if (!draft) {
-    issues.push("欄位組合未通過既有記帳規則,請手動檢查。");
+    issues.push(t("validation.ruleViolation"));
     return { draft: null, issues, ...newEntities };
   }
   return { draft, issues, ...newEntities };

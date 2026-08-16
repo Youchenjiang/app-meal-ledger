@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Sparkles } from "lucide-react";
+import { t } from "../i18n";
+import { useI18n } from "../i18n/react";
 import { missingCounterpartyLabel, missingItemNameLabel, type TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
@@ -7,16 +9,16 @@ import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
 import { FieldBlocks, InferredSpan, type FieldBlockItem } from "./fieldBlocks";
 import { ModeBPanel } from "./ModeBPanel";
-import { MODE_B_FIELD_LABELS, modeBStepsFor } from "./modeB";
+import { modeBFieldLabel, modeBStepsFor } from "./modeB";
 import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
 import { parseDraftSuggestions, type AiDraftSuggestion, type AiLedgerAccounts, type AiSuggestionInput, type NewEntityCarrier } from "./parse";
 import { speechRecognition, type SpeechRecognitionLike } from "./speech";
 
-const kindLabel: Record<string, string> = {
-  expense: "支出",
-  income: "收入",
-  transfer: "轉帳",
-};
+// Kind display names resolve through the copy dictionary (keys kind.*) at
+// call time so they follow the selected locale.
+function kindLabelValue(kind: string): string {
+  return t(`kind.${kind}`);
+}
 
 export type AiLedgerPanelProps = Readonly<{
   accounts: Array<{ name: string; currency: string }>;
@@ -49,10 +51,11 @@ export type AiLedgerPanelProps = Readonly<{
 // The 整段口說 / 逐欄口說 pill switch. Rendered in the page header on 新增
 // and inside the panel on the Zone page.
 export function AiModeSwitch({ mode, onModeChange }: Readonly<{ mode: "a" | "b"; onModeChange: (mode: "a" | "b") => void }>) {
+  const { t } = useI18n();
   return (
-    <div className="ai-mode-switch" role="tablist" aria-label="口說模式">
-      <button className={`ai-mode-tab ${mode === "a" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "a"} onClick={() => onModeChange("a")}>整段口說</button>
-      <button className={`ai-mode-tab ${mode === "b" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "b"} onClick={() => onModeChange("b")}>逐欄口說</button>
+    <div className="ai-mode-switch" role="tablist" aria-label={t("ai.modeAria")}>
+      <button className={`ai-mode-tab ${mode === "a" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "a"} onClick={() => onModeChange("a")}>{t("ai.modeA")}</button>
+      <button className={`ai-mode-tab ${mode === "b" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "b"} onClick={() => onModeChange("b")}>{t("ai.modeB")}</button>
     </div>
   );
 }
@@ -188,6 +191,7 @@ function AiCaptureView({
   onSaveDraft: (suggestion: AiDraftSuggestion) => void;
   onApplyToForm: AiLedgerPanelProps["onApplyToForm"];
 }>) {
+  const { t } = useI18n();
   return (
     <>
       <AiCaptureForm
@@ -214,15 +218,15 @@ function AiCaptureView({
       ) : null}
 
       {suggestions.length > 0 ? (
-        <section className="ai-suggestions" aria-label="AI 記帳草稿">
+        <section className="ai-suggestions" aria-label={t("ai.suggestionsAria")}>
           <div className="draft-list-heading">
             <div>
-              <p className="eyebrow">AI 補帳</p>
-              <h3>{hasValidSuggestion ? "確認後寫入正式記錄" : "項目有問題:可用「填入表單」補齊欄位"}</h3>
+              <p className="eyebrow">{t("ai.eyebrow")}</p>
+              <h3>{hasValidSuggestion ? t("ai.confirmHeading") : t("ai.issuesHeading")}</h3>
             </div>
-            <span>{suggestions.length} 筆</span>
+            <span>{t("ai.entryCount", { count: suggestions.length })}</span>
           </div>
-          {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
+          {anyInferred ? <p className="field-help">{t("ai.inferredHint")}</p> : null}
           {suggestions.map((suggestion, index) => (
             <SuggestionGroupCard
               key={suggestion.id}
@@ -264,11 +268,12 @@ function useAiSubmit({
   setMessage: (message: string) => void;
   setError: (message: string) => void;
 }>) {
+  const { t } = useI18n();
   return async (text: string, imageDataUrl: string | undefined) => {
     setError("");
     setMessage("");
     if (!text.trim() && !imageDataUrl) {
-      setError("請輸入或念出記帳內容,或選擇發票/收據照片。");
+      setError(t("ai.enterOrSayError"));
       return;
     }
     setLoading(true);
@@ -286,7 +291,7 @@ function useAiSubmit({
       const parsed = parseDraftSuggestions(result.data, accounts, categories, today, entityPolicy);
       setSuggestions(parsed);
       if (parsed.length === 0) {
-        setError("AI 沒有辨識出任何交易,請換一種描述試試。");
+        setError(t("ai.noTransactionsError"));
       }
     } finally {
       setLoading(false);
@@ -319,10 +324,11 @@ function useAiSpeech({
     };
   }, []);
 
+  const { t } = useI18n();
   const toggleListening = () => {
     const Ctor = speechRecognition();
     if (!Ctor) {
-      onError("此瀏覽器不支援語音輸入,請改用文字或照片。");
+      onError(t("ai.speechUnsupported"));
       return;
     }
     if (listening || starting) {
@@ -349,7 +355,7 @@ function useAiSpeech({
     recognition.onerror = () => {
       setListening(false);
       setStarting(false);
-      onError("語音辨識失敗,請再試一次或改用文字輸入。");
+      onError(t("ai.speechFailed"));
     };
     recognitionRef.current = recognition;
     setListening(true);
@@ -441,18 +447,19 @@ function useDraftActions({
 
   // Creates any new entities the policy allows (auto, or the approved ask
   // flow), then writes the official record.
+  const { t } = useI18n();
   const resolveAndPersist = (suggestion: AiDraftSuggestion) => {
     if (!suggestion.draft) return;
     const needsCreation = Boolean(suggestion.newAccount || suggestion.newCategory || suggestion.newTransferAccount);
     let created: LocalAccount[] = [];
     if (needsCreation) {
       if (!onResolveNewEntities) {
-        setError("需要先建立新的帳戶/類別才能寫入,請改用「填入表單」或先在設定中建立。");
+        setError(t("ai.newEntityFirst"));
         return;
       }
       const resolved = onResolveNewEntities(suggestion);
       if (resolved === false) {
-        setError("新的帳戶/類別無法建立,請手動檢查。");
+        setError(t("ai.newEntityFailed"));
         return;
       }
       created = resolved;
@@ -463,7 +470,7 @@ function useDraftActions({
       return;
     }
     setSuggestions((current) => current.filter((item) => item !== suggestion));
-    setMessage("已確認並寫入正式記錄。");
+    setMessage(t("ai.confirmedWritten"));
   };
 
   const confirmSuggestion = (suggestion: AiDraftSuggestion) => {
@@ -493,7 +500,7 @@ function useDraftActions({
     if (!suggestion.draft) return;
     onSaveDraft(suggestion.draft);
     setSuggestions((current) => current.filter((item) => item !== suggestion));
-    setMessage("已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。");
+    setMessage(t("ai.savedToQueue"));
   };
 
   return { pendingNewEntities, confirmSuggestion, approveNewEntities, cancelNewEntities, saveSuggestionAsDraft };
@@ -522,6 +529,7 @@ function AiCaptureForm({
   listening: boolean;
   starting: boolean;
 }>) {
+  const { t } = useI18n();
   const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -553,24 +561,24 @@ function AiCaptureForm({
       }}
     >
       <p className="field-help">
-        用說的、打字,或拍發票/收據,AI 會幫你把欄位填好,確認後才寫入正式記錄。
+        {t("ai.inputHelp")}
       </p>
       {!configured ? (
-        <output className="inline-message">尚未設定 AI 金鑰:在 .env 設定 AI_PROVIDER 與 AI_API_KEY 後即可使用。</output>
+        <output className="inline-message">{t("ai.notConfiguredA")}</output>
       ) : null}
-      <label htmlFor="ai-ledger-input">記帳內容</label>
+      <label htmlFor="ai-ledger-input">{t("ai.inputLabel")}</label>
       <textarea
         id="ai-ledger-input"
         className="ai-ledger-input"
         rows={3}
         value={inputText}
         onChange={(event) => onInputTextChange(event.target.value)}
-        placeholder="例如:7/25 中午和同事吃牛肉麵 480、7/26 繳房租 12000"
+        placeholder={t("ai.inputPlaceholder")}
       />
       <div className="ai-ledger-actions">
         <button className="secondary-action" type="button" onClick={onToggleListening} aria-pressed={listening || starting}>
           <Mic size={16} aria-hidden="true" />
-          {listening || starting ? "停止收音" : "用說的"}
+          {listening || starting ? t("ai.stopListening") : t("ai.sayIt")}
         </button>
         <button
           className="secondary-action"
@@ -578,7 +586,7 @@ function AiCaptureForm({
           onClick={() => fileInputRef.current?.click()}
         >
           <ImagePlus size={16} aria-hidden="true" />
-          拍發票/收據
+          {t("ai.takeReceipt")}
         </button>
         <input
           ref={fileInputRef}
@@ -589,10 +597,10 @@ function AiCaptureForm({
         />
         <button className="primary-action" type="submit" disabled={loading}>
           <Sparkles size={16} aria-hidden="true" />
-          {loading ? "AI 辨識中…" : "產生記帳草稿"}
+          {loading ? t("ai.recognizing") : t("ai.generateDraft")}
         </button>
       </div>
-      {selectedImage ? <p className="field-help">已選取:{selectedImage.name}</p> : null}
+      {selectedImage ? <p className="field-help">{t("ai.selectedImage", { name: selectedImage.name })}</p> : null}
     </form>
   );
 }
@@ -602,7 +610,7 @@ function AiCaptureForm({
 function fieldValueFor(draft: TransactionDraft, field: string): string {
   switch (field) {
     case "date": return draft.date;
-    case "kind": return kindLabel[draft.kind as string] ?? draft.kind;
+    case "kind": return kindLabelValue(draft.kind as string) ?? draft.kind;
     case "account": return draft.account;
     case "transferAccount": return draft.transferAccount;
     case "category": return draft.category;
@@ -623,9 +631,8 @@ function displayValueFor(draft: TransactionDraft, field: string): string {
 }
 
 function badgeFor(suggestion: AiDraftSuggestion, field: string): string | undefined {
-  if (field === "account" && suggestion.newAccount) return "帳戶尚不存在";
-  if (field === "category" && suggestion.newCategory) return "類別尚不存在";
-  if (field === "transferAccount" && suggestion.newTransferAccount) return "帳戶尚不存在";
+  if ((field === "account" || field === "transferAccount") && (suggestion.newAccount || suggestion.newTransferAccount)) return t("ai.accountNotExist");
+  if (field === "category" && suggestion.newCategory) return t("ai.categoryNotExist");
   return undefined;
 }
 
@@ -636,7 +643,7 @@ function blockItemsFor(suggestion: AiDraftSuggestion): FieldBlockItem[] {
   if (!draft) return [];
   return modeBStepsFor(draft.kind).map((field) => ({
     field,
-    label: MODE_B_FIELD_LABELS[field],
+    label: modeBFieldLabel(field),
     value: displayValueFor(draft, field),
     state: "filled" as const,
     inferred: isInferred(suggestion.input, field),
@@ -672,6 +679,7 @@ function SuggestionGroupCard({
   onSaveDraft: (suggestion: AiDraftSuggestion) => void;
   onApplyToForm?: (suggestion: AiDraftSuggestion) => void;
 }>) {
+  const { t } = useI18n();
   const blocks = blockItemsFor(suggestion);
   const complete = suggestion.draft
     ? modeBStepsFor(suggestion.draft.kind).every((field) => fieldValueFor(suggestion.draft as TransactionDraft, field) !== "")
@@ -680,10 +688,10 @@ function SuggestionGroupCard({
     <div className="field-block-group">
       <div className="field-block-group-heading">
         <strong>
-          {count > 1 ? `第 ${index + 1} 筆 · ` : ""}
+          {count > 1 ? t("ai.entryPrefix", { index: index + 1 }) : ""}
           {suggestion.draft ? (
             <>
-              <InferredSpan inferred={isInferred(suggestion.input, "kind")}>{kindLabel[suggestion.draft.kind as string] ?? "未知類型"}</InferredSpan>
+              <InferredSpan inferred={isInferred(suggestion.input, "kind")}>{kindLabelValue(suggestion.draft.kind as string) ?? t("ai.unknownKind")}</InferredSpan>
               {" · "}
               <InferredSpan inferred={isInferred(suggestion.input, "currency")}>{suggestion.draft.currency}</InferredSpan>
               {" "}
@@ -703,9 +711,9 @@ function SuggestionGroupCard({
           onFieldConfirm={(field) => onFieldConfirm(index, field)}
         />
       ) : (
-        <p className="field-help">{partialLine(suggestion.input) || "無法辨識的項目"}</p>
+        <p className="field-help">{partialLine(suggestion.input) || t("ai.unrecognizedItem")}</p>
       )}
-      {suggestion.draft && !complete ? <p className="field-help">尚有欄位待填,填完才能確認寫入。</p> : null}
+      {suggestion.draft && !complete ? <p className="field-help">{t("ai.fieldsIncomplete")}</p> : null}
       <SuggestionActions
         suggestion={suggestion}
         complete={complete}
@@ -732,19 +740,20 @@ function SuggestionActions({
   onSaveDraft: (suggestion: AiDraftSuggestion) => void;
   onApplyToForm?: (suggestion: AiDraftSuggestion) => void;
 }>) {
+  const { t } = useI18n();
   const canWrite = Boolean(suggestion.ok && suggestion.draft && complete);
   if (canWrite) {
     return (
       <div className="record-actions">
         <button className="primary-action" type="button" onClick={() => onConfirm(suggestion)}>
-          確認寫入
+          {t("ai.confirmWrite")}
         </button>
         <button className="secondary-action" type="button" onClick={() => onSaveDraft(suggestion)}>
-          存草稿
+          {t("ai.saveDraft")}
         </button>
         {onApplyToForm ? (
           <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-            填入表單
+            {t("ai.applyToForm")}
           </button>
         ) : null}
       </div>
@@ -760,7 +769,7 @@ function SuggestionActions({
       {onApplyToForm ? (
         <div className="record-actions">
           <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-            填入表單
+            {t("ai.applyToForm")}
           </button>
         </div>
       ) : null}
@@ -777,23 +786,23 @@ function AskNewEntitiesDialog({
   onApprove: () => void;
   onCancel: () => void;
 }>) {
+  const { t } = useI18n();
+  const entities = [
+    suggestion.newAccount ? t("ai.accountQuote", { name: suggestion.newAccount }) : "",
+    suggestion.newTransferAccount ? t("ai.accountQuote", { name: suggestion.newTransferAccount }) : "",
+    suggestion.newCategory ? t("ai.categoryQuote", { name: suggestion.newCategory }) : "",
+  ].filter(Boolean).join(t("common.and"));
   return (
-    <dialog className="ask-new-entities" open aria-label="確認新增帳戶或類別">
+    <dialog className="ask-new-entities" open aria-label={t("ai.newEntitiesDialogAria")}>
       <p>
-        這筆記錄提到尚未建立的
-        {[
-          suggestion.newAccount ? `帳戶「${suggestion.newAccount}」` : "",
-          suggestion.newTransferAccount ? `帳戶「${suggestion.newTransferAccount}」` : "",
-          suggestion.newCategory ? `類別「${suggestion.newCategory}」` : "",
-        ].filter(Boolean).join("與")}
-        ,是否要新增?
+        {t("ai.newEntitiesQuestion", { entities })}
       </p>
       <div className="record-actions">
         <button className="primary-action" type="button" onClick={onApprove}>
-          新增並寫入
+          {t("ai.createAndWrite")}
         </button>
         <button className="secondary-action" type="button" onClick={onCancel}>
-          取消
+          {t("ai.cancel")}
         </button>
       </div>
     </dialog>
@@ -949,9 +958,12 @@ function DateDisplay({ inputDate, date, inferred }: Readonly<{ inputDate: unknow
 
 // The group heading for a rejected suggestion: kind plus a short note
 // explaining why it is not confirmable.
+const knownKindKeys = new Set(["expense", "income", "transfer"]);
+
 function suggestionHeading(suggestion: AiDraftSuggestion): string {
-  if (kindLabel[suggestion.input.kind as string]) {
-    return `${kindLabel[suggestion.input.kind as string]} · 欄位不完整`;
+  const raw = suggestion.input.kind as string;
+  if (knownKindKeys.has(raw)) {
+    return t("ai.incompleteHeading", { kind: kindLabelValue(raw) });
   }
-  return "未知類型 · 無法辨識";
+  return t("ai.unrecognizedHeading");
 }

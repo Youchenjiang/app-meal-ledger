@@ -1,10 +1,16 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { LanguageProvider } from "../i18n/react";
 import { AiLedgerPanel } from "./AiLedgerPanel";
 
 vi.mock("./config", () => ({ isAiConfigured: () => true }));
 vi.mock("./client", () => ({ requestAiJson: vi.fn() }));
+
+function renderPanel(ui: ReactElement) {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
 
 import { requestAiJson } from "./client";
 
@@ -18,7 +24,7 @@ beforeEach(() => {
 describe("AiLedgerPanel", () => {
   test("switches to the step-by-step mode B panel", async () => {
     const user = userEvent.setup();
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.click(screen.getByRole("tab", { name: "逐欄口說" }));
 
@@ -34,7 +40,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -56,7 +62,7 @@ describe("AiLedgerPanel", () => {
     const onSaveDraft = vi.fn();
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={onSaveDraft} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={onSaveDraft} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "早餐 90");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -73,7 +79,7 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "測試 100");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -89,7 +95,7 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "退款 100");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -105,7 +111,7 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 中午和同事吃便當 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -122,7 +128,7 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "測試 100");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -139,7 +145,7 @@ describe("AiLedgerPanel", () => {
     const onApplyToForm = vi.fn();
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={onApplyToForm} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={onApplyToForm} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -160,7 +166,7 @@ describe("AiLedgerPanel", () => {
     const onApplyToForm = vi.fn();
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={onApplyToForm} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={onApplyToForm} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -181,7 +187,7 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -190,7 +196,7 @@ describe("AiLedgerPanel", () => {
     const itemBlock = screen.getByText("品項").closest(".field-block");
     expect(itemBlock).not.toBeNull();
     expect(itemBlock?.textContent).toContain("牛肉麵");
-    expect(screen.queryByText(/Merchant unavailable/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/商家不詳/u)).not.toBeInTheDocument();
   });
 
   test("lets the user edit a field in place before confirming", async () => {
@@ -200,7 +206,7 @@ describe("AiLedgerPanel", () => {
     });
     const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => null);
     const user = userEvent.setup();
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -235,7 +241,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "新錢包 中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -261,7 +267,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "新錢包 中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -290,7 +296,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 錢包轉 100 到新儲蓄戶");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -320,7 +326,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 錢包轉 100 到新儲蓄戶");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -351,7 +357,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "新錢包 中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -371,7 +377,7 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+    renderPanel(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "7/25 中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));

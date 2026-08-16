@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import { useI18n } from "../i18n/react";
 
 // Marks a field value the model inferred rather than the user stated. The
 // user confirms the corrected value before it is written (ADR 0003).
 export function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; children: ReactNode }>): ReactNode {
+  const { t } = useI18n();
   return inferred
-    ? <span className="inferred-field" title="AI 推論的欄位,請確認">{children}</span>
+    ? <span className="inferred-field" title={t("ai.inferredTitle")}>{children}</span>
     : children;
 }
 
@@ -46,6 +48,7 @@ export function FieldBlocks({
   onFieldChange?: (field: string, value: string) => void;
   onFieldConfirm?: (field: string) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <ol className="field-blocks">
       {items.map((item) => {
@@ -65,7 +68,7 @@ export function FieldBlocks({
               <button
                 className="field-block-content"
                 type="button"
-                aria-label={`編輯 ${item.label}`}
+                aria-label={t("ai.editFieldAria", { label: item.label })}
                 onClick={() => onEditField(item.field)}
               >
                 {content}
@@ -89,6 +92,7 @@ function FieldBlockValue({
   onFieldChange?: (field: string, value: string) => void;
   onFieldConfirm?: (field: string) => void;
 }>) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   // Focus the input when the block opens for editing (the autoFocus prop is
   // avoided so the focus behavior stays predictable under repeated edits).
@@ -119,5 +123,5 @@ function FieldBlockValue({
       </span>
     );
   }
-  return <span className="field-block-placeholder">待填</span>;
+  return <span className="field-block-placeholder">{t("ai.pendingPlaceholder")}</span>;
 }
