@@ -15,15 +15,15 @@ function collectBrowserErrors(page: Page) {
 
 async function openWorkspace(page: Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
 }
 
 async function addAccount(page: Page, name: string) {
   await page.getByRole("button", { name: "明細", exact: true }).click();
-  await page.getByRole("tab", { name: "Accounts", exact: true }).click();
-  await page.getByLabel("Account name").fill(name);
-  await page.getByRole("button", { name: "Add account" }).click();
-  await expect(page.getByLabel("Available accounts")).toContainText(name);
+  await page.getByRole("tab", { name: "帳戶", exact: true }).click();
+  await page.getByLabel("帳戶名稱").fill(name);
+  await page.getByRole("button", { name: "新增帳戶" }).click();
+  await expect(page.getByLabel("可用帳戶")).toContainText(name);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -57,19 +57,19 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
   await openWorkspace(page);
   await addAccount(page, "Daily wallet");
   await page.getByRole("button", { name: "專區" }).click();
-  await page.getByLabel("Account", { exact: true }).selectOption("Daily wallet");
-  await page.getByLabel("Category", { exact: true }).selectOption("Daily");
-  await page.getByLabel("Merchant", { exact: true }).fill("全聯");
-  await page.getByLabel("Item name", { exact: true }).fill("香蕉");
-  await page.getByLabel("Amount", { exact: true }).fill("417");
-  await page.getByRole("button", { name: "Save record" }).click();
+  await page.getByLabel("帳戶", { exact: true }).selectOption("Daily wallet");
+  await page.getByLabel("類別", { exact: true }).selectOption("日用");
+  await page.getByLabel("商家", { exact: true }).fill("全聯");
+  await page.getByLabel("品項名稱", { exact: true }).fill("香蕉");
+  await page.getByLabel("金額", { exact: true }).fill("417");
+  await page.getByRole("button", { name: "儲存記錄" }).click();
 
-  await expect(page.getByText("Record saved to the local ledger.")).toBeVisible();
-  await page.getByRole("button", { name: "Open Ledger" }).click();
+  await expect(page.getByText("記錄已存入本機明細。")).toBeVisible();
+  await page.getByRole("button", { name: "開啟明細" }).click();
 
-  await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Confirmed ledger records")).toContainText("全聯");
-  await expect(page.getByText("No confirmed ledger records yet.")).not.toBeVisible();
+  await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  await expect(page.getByLabel("已確認的明細記錄")).toContainText("全聯");
+  await expect(page.getByText("尚無已確認的明細記錄。")).not.toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -80,17 +80,17 @@ test("opens the account page with provider sign-in actions", async ({ page }) =>
   // /account merged into Settings: the 登入 section is the default tab.
   await page.getByRole("button", { name: "設定", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "選用雲端同步", exact: true })).toBeVisible();
   expect(page.url()).toMatch(/\/settings$/);
-  const emailInput = page.getByLabel("Email", { exact: true });
+  const emailInput = page.getByLabel("電子郵件", { exact: true });
   if (await emailInput.count()) {
     await expect(emailInput).toBeVisible();
-    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue with Google", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue with Facebook", exact: true })).toBeVisible();
+    await expect(page.getByLabel("密碼", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "繼續", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "使用 Google 繼續", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "使用 Facebook 繼續", exact: true })).toBeVisible();
   } else {
-    await expect(page.getByText("Cloud authentication is unavailable in this local preview.", { exact: false })).toBeVisible();
+    await expect(page.getByText("此本機預覽中無法使用雲端驗證。", { exact: false })).toBeVisible();
   }
   await expectNoHorizontalOverflow(page);
 
@@ -101,9 +101,9 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "登出" })).toHaveCount(0);
   await page.getByRole("button", { name: "專區" }).click();
-  await page.getByRole("button", { name: /Record meal/ }).click();
+  await page.getByRole("button", { name: /記錄餐點/ }).click();
   const mealLabels = page.locator(".meal-form > label");
   await expect(mealLabels).toHaveCount(2);
   for (const label of await mealLabels.all()) {
@@ -112,16 +112,16 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
     if (!labelBox || !controlBox) throw new Error("Expected meal form controls to be measurable.");
     expect(controlBox.y).toBeGreaterThan(labelBox.y + labelBox.height);
   }
-  await expect(page.getByRole("button", { name: "Take photo" })).toBeVisible();
-  await page.getByLabel("Meal photos").setInputFiles([
+  await expect(page.getByRole("button", { name: "拍照" })).toBeVisible();
+  await page.getByLabel("餐點照片").setInputFiles([
     { name: "meal-1.jpg", mimeType: "image/jpeg", buffer: Buffer.from("one") },
     { name: "meal-2.jpg", mimeType: "image/jpeg", buffer: Buffer.from("two") },
   ]);
-  await page.getByRole("button", { name: "Save meal" }).click();
+  await page.getByRole("button", { name: "儲存餐點" }).click();
 
-  await expect(page.getByText("Meal saved locally with 2 photos.")).toBeVisible();
+  await expect(page.getByText("餐點已存至本機,含 2 張照片。")).toBeVisible();
   await page.getByRole("button", { name: "明細", exact: true }).click();
-  await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
+  await expect(page.getByText("尚無已確認的明細記錄。")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -130,19 +130,19 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "專區" }).click();
-  await page.getByRole("button", { name: /Scan invoice/ }).click();
-  await page.getByLabel("Scan images").setInputFiles({
+  await page.getByRole("button", { name: /掃描發票/ }).click();
+  await page.getByLabel("掃描圖片").setInputFiles({
     name: "invoice.jpg",
     mimeType: "image/jpeg",
     buffer: Buffer.from("invoice"),
   });
-  await page.getByRole("button", { name: "Keep scan drafts" }).click();
+  await page.getByRole("button", { name: "保留掃描草稿" }).click();
 
-  await expect(page.getByText("1 scan draft saved locally for review.")).toBeVisible();
+  await expect(page.getByText("1 筆掃描草稿已存至本機待審核。")).toBeVisible();
   await expect(page.getByText("invoice.jpg")).toBeVisible();
   await page.getByRole("button", { name: /^明細/u }).click();
   await expect(page.getByRole("button", { name: /^明細/u }).locator(".nav-badge")).toHaveText("1");
-  await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
+  await expect(page.getByText("尚無已確認的明細記錄。")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -151,8 +151,8 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await openWorkspace(page);
-  await expect(page.locator("nav[aria-label='MealLedger navigation']")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.locator("nav[aria-label='MealLedger 導覽']")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -183,7 +183,7 @@ test("keeps the account page compact and aligned on mobile", async ({ page }) =>
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "設定", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "選用雲端同步", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -194,12 +194,12 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "專區" }).click();
-  await expect(page.getByRole("heading", { name: "Zone", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "專區", exact: true })).toBeVisible();
   await expect(page.locator(".capture-intent-button")).toHaveCount(6);
-  await expect(page.getByRole("heading", { name: "What are you saving?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "你要記錄什麼?" })).toBeVisible();
   await page.getByRole("button", { name: "明細", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
-  await expectHorizontallyWithinViewport(page, "nav[aria-label='MealLedger navigation'] .nav-item");
+  await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  await expectHorizontallyWithinViewport(page, "nav[aria-label='MealLedger 導覽'] .nav-item");
   await expect(page.locator(".table-card")).toHaveCount(0);
   await expect(page.locator(".ledger-record-card")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
@@ -234,7 +234,7 @@ test("keeps the compact navigation on one row", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 900 });
 
   await openWorkspace(page);
-  const tops = await page.locator("nav[aria-label='MealLedger navigation'] .nav-item").evaluateAll((items) =>
+  const tops = await page.locator("nav[aria-label='MealLedger 導覽'] .nav-item").evaluateAll((items) =>
     items.map((item) => Math.round(item.getBoundingClientRect().top)),
   );
   expect(new Set(tops).size).toBe(1);
@@ -248,9 +248,9 @@ test("keeps the first-account flow usable at 320px", async ({ page }) => {
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "專區" }).click();
-  await page.getByRole("button", { name: "Create first account" }).click();
+  await page.getByRole("button", { name: "建立第一個帳戶" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Add account" });
+  const dialog = page.getByRole("dialog", { name: "新增帳戶" });
   await expect(dialog).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
@@ -270,9 +270,9 @@ test("keeps compact navigation stable near its breakpoint", async ({ page }) => 
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "明細", exact: true }).click();
-  await page.getByRole("tab", { name: "Accounts", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Ledger accounts", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "帳戶", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "明細帳戶", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
