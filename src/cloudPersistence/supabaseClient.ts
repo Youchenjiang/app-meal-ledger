@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { CloudFilter, CloudMutationError, CloudPersistenceClient, CloudReadResult, CloudRow } from "./contracts";
 import type { ReferenceBootstrapClient } from "./bootstrap";
 
@@ -30,7 +31,7 @@ export type RawSupabaseClient = {
 function normalizeError(error: RawError): CloudMutationError | null {
   if (!error) return null;
   return {
-    message: error.message ?? "Cloud request failed.",
+    message: error.message ?? t("cloud.requestFailed"),
     ...(error.code ? { code: error.code } : {}),
     ...(error.details ? { details: error.details } : {}),
   };

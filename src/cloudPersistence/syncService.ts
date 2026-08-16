@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import { bootstrapReferences } from "./bootstrap";
 import type { CloudPersistenceClient, CloudReferenceMap } from "./contracts";
@@ -175,7 +176,7 @@ function applyItemFailure(state: SyncLocalChangesResult, item: CloudSyncQueueIte
 async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const draft = input.drafts.find((candidate) => candidate.id === item.targetId);
-  if (!draft) return applyItemFailure(state, item, "Local draft is no longer available.", input.now);
+  if (!draft) return applyItemFailure(state, item, t("cloud.draftGone"), input.now);
   const result = await persistDraft(input.client, mapDraft(draft, input.userId));
   return { ...state, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
@@ -183,15 +184,15 @@ async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, sta
 function syncAccountItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): SyncLocalChangesResult {
   const { input, references } = context;
   const account = input.accounts.find((candidate) => candidate.id === item.targetId);
-  if (!account) return applyItemFailure(state, item, "Local account is no longer available.", input.now);
-  if (!references.accountIds[account.id]) return applyItemFailure(state, item, "Cloud account reference was not returned.", input.now);
+  if (!account) return applyItemFailure(state, item, t("cloud.accountGone"), input.now);
+  if (!references.accountIds[account.id]) return applyItemFailure(state, item, t("cloud.accountRefMissing"), input.now);
   return { ...state, queue: markCloudSynced(state.queue, item.id, input.now) };
 }
 
 async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const media = input.media.find((candidate) => candidate.id === item.targetId);
-  if (!media) return applyItemFailure(state, item, "Local media metadata is no longer available.", input.now);
+  if (!media) return applyItemFailure(state, item, t("cloud.mediaGone"), input.now);
   const result = await persistMediaAsset(input.client, mapMediaAsset(media, input.userId, input.now));
   const nextMedia = result.ok ? markMediaSynced(state.media, media.id) : state.media;
   return { ...state, media: nextMedia, queue: applyPersistenceResult(state.queue, item, result, input.now) };
@@ -200,7 +201,7 @@ async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, sta
 async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const scan = input.scans.find((candidate) => candidate.id === item.targetId);
-  if (!scan) return applyItemFailure(state, item, "Local scan metadata is no longer available.", input.now);
+  if (!scan) return applyItemFailure(state, item, t("cloud.scanGone"), input.now);
   const media = input.media.find((candidate) => candidate.id === scan.id);
   if (media && !hasUploadedMedia(input.media, [scan.id])) return state;
   const mediaLink = media
@@ -214,7 +215,7 @@ async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, stat
 async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input, references } = context;
   const meal = input.meals.find((candidate) => candidate.id === item.targetId);
-  if (!meal) return applyItemFailure(state, item, "Local meal metadata is no longer available.", input.now);
+  if (!meal) return applyItemFailure(state, item, t("cloud.mealGone"), input.now);
   if (!hasUploadedMedia(input.media, meal.mediaAssetIds)) return state;
   const mediaIds = Object.fromEntries(input.media.map((media) => [
     media.id,
@@ -230,7 +231,7 @@ async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, stat
 async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input, references } = context;
   const record = input.records.find((candidate) => candidate.id === item.targetId);
-  if (!record) return applyItemFailure(state, item, "Local record is no longer available.", input.now);
+  if (!record) return applyItemFailure(state, item, t("cloud.recordGone"), input.now);
   const feeRecord = record.kind === "transfer"
     ? input.records.find((candidate) => candidate.kind === "expense" && candidate.linkedRecordId === record.id)
     : undefined;

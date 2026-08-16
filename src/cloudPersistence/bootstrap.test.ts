@@ -80,7 +80,7 @@ describe("cloud reference bootstrap", () => {
       tags: ["Subscription"],
     });
 
-    expect(result).toEqual({ ok: false, table: "categories", message: "Cloud reference response omitted: Daily." });
+    expect(result).toEqual({ ok: false, table: "categories", message: "雲端參照回應缺少:Daily。" });
     expect(mock.calls).toEqual(["accounts", "categories"]);
   });
 

@@ -338,7 +338,7 @@ describe("cloud sync service", () => {
     }));
 
     expect(result.records[0].status).toBe("local-only");
-    expect(result.queue[0]).toMatchObject({ state: "retryable-error", lastError: expect.stringContaining("omitted") });
+    expect(result.queue[0]).toMatchObject({ state: "retryable-error", lastError: expect.stringContaining("缺少") });
   });
 
   test("syncs meal, media metadata, and temporary scan source rows independently", async () => {

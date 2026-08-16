@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { TaxonomyAliasSeed } from "../taxonomy/defaults";
 import { mapLocalAccount } from "./mappers";
@@ -107,7 +108,7 @@ async function upsertAndMap(
     .map((row) => row.name)
     .filter((name): name is string => typeof name === "string" && !ids[name]);
   if (missing.length > 0) {
-    return { ok: false, table, message: `Cloud reference response omitted: ${missing.join(", ")}.` };
+    return { ok: false, table, message: t("cloud.bootstrapMissing", { names: missing.join(", ") }) };
   }
 
   return { ok: true, ids };
