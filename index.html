@@ -1,6 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
+    <script>
+      // Apply the persisted/browser-detected locale to <html lang> before
+      // first paint (mirrors the theme script below). The React i18n store
+      // keeps this in sync at runtime and on language switch.
+      (function () {
+        try {
+          var stored = localStorage.getItem("mealledger.locale");
+          var locale = stored === "en-US" ? "en-US" : stored === "zh-TW" ? "zh-TW" : null;
+          if (!locale) locale = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh-TW" : "en-US";
+          document.documentElement.lang = locale === "zh-TW" ? "zh-Hant" : "en";
+        } catch (error) {
+          // No storage access: keep the zh-Hant default from the markup.
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#171a1c" />
