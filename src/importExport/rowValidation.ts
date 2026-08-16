@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { ManualRecordKind } from "../manualLedger/kinds";
 import type { NormalizedImportField } from "./mapping";
 
@@ -32,7 +33,7 @@ function text(row: NormalizedImportRow, field: NormalizedImportField): string {
 function required(row: NormalizedImportRow, field: NormalizedImportField, label: string, errors: string[]): string {
   const value = text(row, field);
   if (!value) {
-    errors.push(`${label} is required.`);
+    errors.push(t("validation.required", { label }));
   }
   return value;
 }
@@ -64,14 +65,14 @@ function validatePrecision(amount: string, currency: string, errors: string[]): 
   const precision = currency === "TWD" || currency === "JPY" ? 0 : 2;
   const fractionalDigits = amount.split(".")[1]?.length ?? 0;
   if (fractionalDigits > precision) {
-    errors.push(`${currency} supports at most ${precision} decimal places.`);
+    errors.push(t("validation.precision", { currency, precision }));
   }
 }
 
 function positiveAmount(amount: string, label: string, errors: string[]): string {
   const normalized = normalizeAmount(amount);
   if (normalized === null || Number(normalized) <= 0) {
-    errors.push(`${label} must be greater than zero.`);
+    errors.push(t("validation.amountPositive", { label }));
     return "";
   }
   return normalized;
@@ -82,22 +83,22 @@ function accountFor(accounts: ImportAccount[], name: string): ImportAccount | un
 }
 
 function validateAccount(row: NormalizedImportRow, accounts: ImportAccount[], errors: string[]): ImportAccount | undefined {
-  const name = required(row, "account", "Account", errors);
+  const name = required(row, "account", t("field.account"), errors);
   const account = accountFor(accounts, name);
   if (name && !account) {
-    errors.push(`Account '${name}' does not exist.`);
+    errors.push(t("validation.accountMissing", { name }));
   }
   return account;
 }
 
 function validateDate(row: NormalizedImportRow, errors: string[]): string {
-  const value = required(row, "date", "Date", errors);
+  const value = required(row, "date", t("field.date"), errors);
   if (!value) {
     return "";
   }
   const normalized = normalizeDate(value);
   if (!normalized) {
-    errors.push("Date must use YYYY-MM-DD or YYYY/MM/DD.");
+    errors.push(t("validation.dateFormat"));
     return "";
   }
   return normalized;
@@ -124,15 +125,15 @@ function normalizeImportAmount(normalized: NormalizedImportRow, kind: ManualReco
   const currency = text(normalized, "currency") || account?.currency || "";
   const rawAmount = text(normalized, "amount");
   const parsedAmount = normalizeAmount(rawAmount);
-  const amount = kind === "adjustment" ? parsedAmount ?? "" : positiveAmount(rawAmount, "Amount", errors);
-  if (kind === "adjustment" && (parsedAmount === null || Number(parsedAmount) === 0)) errors.push("Adjustment amount must be a non-zero number.");
+  const amount = kind === "adjustment" ? parsedAmount ?? "" : positiveAmount(rawAmount, t("field.amount"), errors);
+  if (kind === "adjustment" && (parsedAmount === null || Number(parsedAmount) === 0)) errors.push(t("validation.adjustmentNonZero"));
   if (currency && amount) validatePrecision(amount, currency, errors);
   return amount;
 }
 
 function validateKindFields(normalized: NormalizedImportRow, kind: ManualRecordKind, account: ImportAccount | undefined, accounts: ImportAccount[], amount: string, errors: string[]): void {
   if (!supportedKinds.has(kind)) {
-    errors.push("Kind is required and must be a supported ledger kind.");
+    errors.push(t("validation.kindRequired"));
     return;
   }
   if (kind === "expense") {
@@ -144,7 +145,7 @@ function validateKindFields(normalized: NormalizedImportRow, kind: ManualRecordK
     return;
   }
   if (kind === "fund-addition") {
-    validateDateAndRequired(normalized, "source", "Source", errors);
+    validateDateAndRequired(normalized, "source", t("field.source"), errors);
     return;
   }
   if (kind === "adjustment") {
@@ -163,14 +164,14 @@ function validateKindFields(normalized: NormalizedImportRow, kind: ManualRecordK
 }
 
 function validateExpenseFields(normalized: NormalizedImportRow, errors: string[]): void {
-  validateDateAndRequired(normalized, "category", "Category", errors);
-  required(normalized, "merchant", "Merchant", errors);
-  required(normalized, "item_name", "Item name", errors);
+  validateDateAndRequired(normalized, "category", t("field.category"), errors);
+  required(normalized, "merchant", t("field.merchant"), errors);
+  required(normalized, "item_name", t("field.itemName"), errors);
 }
 
 function validateIncomeFields(normalized: NormalizedImportRow, errors: string[]): void {
-  validateDateAndRequired(normalized, "category", "Category", errors);
-  required(normalized, "source", "Source", errors);
+  validateDateAndRequired(normalized, "category", t("field.category"), errors);
+  required(normalized, "source", t("field.source"), errors);
 }
 
 function validateDateAndRequired(normalized: NormalizedImportRow, field: keyof NormalizedImportRow, label: string, errors: string[]): void {
@@ -179,31 +180,31 @@ function validateDateAndRequired(normalized: NormalizedImportRow, field: keyof N
 }
 
 function validateAdjustmentFields(normalized: NormalizedImportRow, amount: string, errors: string[]): void {
-  validateDateAndRequired(normalized, "reason", "Reason", errors);
-  if (amount && Number(amount) === 0) errors.push("Adjustment amount cannot be zero.");
+  validateDateAndRequired(normalized, "reason", t("field.reason"), errors);
+  if (amount && Number(amount) === 0) errors.push(t("validation.adjustmentZero"));
 }
 
 function validateRefundFields(normalized: NormalizedImportRow, errors: string[]): void {
-  validateDateAndRequired(normalized, "category", "Category", errors);
-  required(normalized, "merchant", "Merchant or source", errors);
-  required(normalized, "refund_reason", "Refund reason", errors);
+  validateDateAndRequired(normalized, "category", t("field.category"), errors);
+  required(normalized, "merchant", t("field.merchantOrSource"), errors);
+  required(normalized, "refund_reason", t("field.refundReason"), errors);
   const isPayback = text(normalized, "refund_subtype") === "payback";
   const hasLinkedExpense = Boolean(text(normalized, "refund_linked_record_ids") || text(normalized, "refund_linked_record_id"));
-  if (isPayback && !hasLinkedExpense) errors.push("Payback requires a linked expense.");
+  if (isPayback && !hasLinkedExpense) errors.push(t("validation.paybackNeedsExpense"));
 }
 
 function validateTransferFields(normalized: NormalizedImportRow, account: ImportAccount | undefined, accounts: ImportAccount[], amount: string, errors: string[]): void {
   normalized.date = validateDate(normalized, errors);
-  const targetName = required(normalized, "target_account", "Target account", errors);
+  const targetName = required(normalized, "target_account", t("field.targetAccount"), errors);
   const targetAccount = accountFor(accounts, targetName);
-  if (targetName && !targetAccount) errors.push(`Target account '${targetName}' does not exist.`);
-  if (account?.name && account.name === targetAccount?.name) errors.push("Source and target accounts must be different.");
+  if (targetName && !targetAccount) errors.push(t("validation.targetAccountMissing", { name: targetName }));
+  if (account?.name && account.name === targetAccount?.name) errors.push(t("validation.sameAccount"));
   const targetCurrency = text(normalized, "target_currency") || targetAccount?.currency || "";
   const isCrossCurrency = Boolean(targetAccount && account && targetAccount.currency !== account.currency);
   if (isCrossCurrency) {
-    normalized.target_amount = positiveAmount(text(normalized, "target_amount"), "Target amount", errors);
-    required(normalized, "target_currency", "Target currency", errors);
-    if (targetCurrency && targetAccount && targetCurrency !== targetAccount.currency) errors.push("Target currency must match the target account currency.");
+    normalized.target_amount = positiveAmount(text(normalized, "target_amount"), t("field.targetAmount"), errors);
+    required(normalized, "target_currency", t("field.targetCurrency"), errors);
+    if (targetCurrency && targetAccount && targetCurrency !== targetAccount.currency) errors.push(t("validation.targetCurrencyMismatch"));
   } else if (targetAccount) {
     normalized.target_amount = text(normalized, "target_amount") || amount;
     normalized.target_currency = targetAccount.currency;
@@ -211,22 +212,22 @@ function validateTransferFields(normalized: NormalizedImportRow, account: Import
 }
 
 function validateUnresolvedExpenseFields(normalized: NormalizedImportRow, errors: string[]): void {
-  const precision = required(normalized, "time_precision", "Time precision", errors);
+  const precision = required(normalized, "time_precision", t("field.timePrecision"), errors);
   if (precision === "day") {
     normalized.date = validateDate(normalized, errors);
     return;
   }
   if (precision !== "month" && precision !== "period") {
-    if (precision) errors.push("Time precision must be day, month, or period.");
+    if (precision) errors.push(t("validation.timePrecisionValue"));
     return;
   }
-  const start = required(normalized, "period_start", "Period start", errors);
-  const end = required(normalized, "period_end", "Period end", errors);
+  const start = required(normalized, "period_start", t("field.periodStart"), errors);
+  const end = required(normalized, "period_end", t("field.periodEnd"), errors);
   const normalizedStart = normalizeDate(start);
   const normalizedEnd = normalizeDate(end);
-  if (start && !normalizedStart) errors.push("Period start must use YYYY-MM-DD or YYYY/MM/DD.");
-  if (end && !normalizedEnd) errors.push("Period end must use YYYY-MM-DD or YYYY/MM/DD.");
-  if (normalizedStart && normalizedEnd && normalizedStart > normalizedEnd) errors.push("Period start must not be after period end.");
+  if (start && !normalizedStart) errors.push(t("validation.periodStartFormat"));
+  if (end && !normalizedEnd) errors.push(t("validation.periodEndFormat"));
+  if (normalizedStart && normalizedEnd && normalizedStart > normalizedEnd) errors.push(t("validation.periodOrder"));
   normalized.period_start = normalizedStart ?? start;
   normalized.period_end = normalizedEnd ?? end;
 }
@@ -234,15 +235,15 @@ function validateUnresolvedExpenseFields(normalized: NormalizedImportRow, errors
 function validateImportFees(normalized: NormalizedImportRow, kind: ManualRecordKind, accounts: ImportAccount[], errors: string[]): void {
   const feeFields = ["fee_account", "fee_amount", "fee_currency", "fee_category"] as const;
   if (!feeFields.some((field) => Boolean(text(normalized, field)))) return;
-  if (kind !== "transfer") errors.push("Transfer fee fields are only valid for transfer rows.");
-  const feeAccountName = required(normalized, "fee_account", "Fee account", errors);
+  if (kind !== "transfer") errors.push(t("validation.feeTransferOnly"));
+  const feeAccountName = required(normalized, "fee_account", t("field.feeAccount"), errors);
   const feeAccount = accountFor(accounts, feeAccountName);
-  if (feeAccountName && !feeAccount) errors.push(`Fee account '${feeAccountName}' does not exist.`);
+  if (feeAccountName && !feeAccount) errors.push(t("validation.feeAccountMissing", { name: feeAccountName }));
   const feeCurrency = text(normalized, "fee_currency") || feeAccount?.currency || "";
   if (!text(normalized, "fee_currency") && feeAccount) normalized.fee_currency = feeAccount.currency;
-  const feeAmount = positiveAmount(text(normalized, "fee_amount"), "Fee amount", errors);
+  const feeAmount = positiveAmount(text(normalized, "fee_amount"), t("field.feeAmount"), errors);
   if (feeAmount) normalized.fee_amount = feeAmount;
   if (feeCurrency && feeAmount) validatePrecision(feeAmount, feeCurrency, errors);
-  if (feeAccount && feeCurrency && feeAccount.currency !== feeCurrency) errors.push("Fee currency must match the fee account currency.");
-  required(normalized, "fee_category", "Fee category", errors);
+  if (feeAccount && feeCurrency && feeAccount.currency !== feeCurrency) errors.push(t("validation.feeCurrencyMismatch"));
+  required(normalized, "fee_category", t("field.feeCategory"), errors);
 }

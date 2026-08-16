@@ -28,7 +28,7 @@ describe("import row validation", () => {
     const [result] = validateImportRows([{ date: "2026-07-13", account: "Cash", amount: "70" }], accounts);
 
     expect(result.ok).toBe(false);
-    expect(result.errors).toContain("Kind is required and must be a supported ledger kind.");
+    expect(result.errors).toContain("類型為必填,且必須是受支援的明細類型。");
   });
 
   test("validates same-currency and cross-currency transfer fields", () => {
@@ -38,7 +38,7 @@ describe("import row validation", () => {
     ], accounts);
 
     expect(sameCurrency.ok).toBe(false);
-    expect(sameCurrency.errors).toContain("Source and target accounts must be different.");
+    expect(sameCurrency.errors).toContain("來源與目標帳戶必須不同。");
     expect(crossCurrency).toMatchObject({ ok: true });
     expect(crossCurrency.normalized).toMatchObject({ target_currency: "JPY", currency: "TWD" });
   });
@@ -49,8 +49,8 @@ describe("import row validation", () => {
       { kind: "refund", date: "2026-07-13", account: "Cash", amount: "50", category: "Daily", merchant: "Store", refund_reason: "Return", refund_subtype: "payback" },
     ], accounts);
 
-    expect(unresolved.errors).toContain("Period start must not be after period end.");
-    expect(payback.errors).toContain("Payback requires a linked expense.");
+    expect(unresolved.errors).toContain("期間開始不得晚於期間結束。");
+    expect(payback.errors).toContain("還款需要連結一筆支出。");
   });
 
   test("rejects invalid currency precision and unknown accounts", () => {
@@ -58,7 +58,7 @@ describe("import row validation", () => {
       { kind: "income", date: "2026-07-13", account: "Missing", amount: "10.123", currency: "TWD", category: "Salary", source: "Work" },
     ], accounts);
 
-    expect(result.errors).toContain("Account 'Missing' does not exist.");
-    expect(result.errors).toContain("TWD supports at most 0 decimal places.");
+    expect(result.errors).toContain("帳戶「Missing」不存在。");
+    expect(result.errors).toContain("TWD 最多支援 0 位小數。");
   });
 });

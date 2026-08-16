@@ -6,7 +6,7 @@ describe("legacy category aliases", () => {
     const result = classifyCategoryAlias("特殊");
 
     expect(result).toMatchObject({ status: "review", suggestedCategory: null });
-    expect(result.reason).toContain("more specific category");
+    expect(result.reason).toContain("更具體");
   });
 
   test("maps 0 and ? to unresolved review suggestions", () => {
@@ -27,6 +27,6 @@ describe("legacy category aliases", () => {
 
   test("returns no review summary for a normal category", () => {
     expect(categoryReviewSummary("日用")).toBeNull();
-    expect(categoryReviewSummary("特殊")).toContain("requires review");
+    expect(categoryReviewSummary("特殊")).toContain("需審核");
   });
 });

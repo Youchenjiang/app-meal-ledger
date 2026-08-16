@@ -2,6 +2,7 @@
 // balance. Off by default (allows negative balances, matching the accounting
 // rules); when enabled, the write path rejects expenses and balance
 // adjustments that would push an editable account below zero. See ADR 0008.
+import { t } from "../i18n";
 import type { LocalAccount } from "./accounts";
 import type { LocalLedgerRecord } from "./records";
 import { createOfficialRecordBundle } from "./records";
@@ -67,5 +68,5 @@ export function negativeBalanceRejectionReason(
   if (!below) {
     return null;
   }
-  return `「${below.name}」餘額將低於零,已依負餘額政策拒絕此筆記錄。`;
+  return t("validation.negativeBalance", { name: below.name });
 }
