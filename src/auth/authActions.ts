@@ -50,25 +50,29 @@ export type IdentityLinkClient = {
   };
 };
 
+import { t } from "../i18n";
+
 export type PasswordSession = { user?: { id?: string } } | null;
 export type PasswordAuthResult = { ok: true; session: PasswordSession } | { ok: false; message: string };
 
 function validatePasswordCredentials(email: string, password: string): PasswordAuthResult | null {
   const normalizedEmail = email.trim();
   if (!normalizedEmail) {
-    return { ok: false, message: "Email is required." };
+    return { ok: false, message: t("auth.emailRequired") };
   }
   if (!password.trim()) {
-    return { ok: false, message: "Password is required." };
+    return { ok: false, message: t("auth.passwordRequired") };
   }
   return null;
 }
 
 function authFailureMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Authentication failed. Try again.";
+  return error instanceof Error ? error.message : t("auth.failed");
 }
 
-export const ALREADY_REGISTERED_MESSAGE = "An account with this email already exists. Sign in with your password.";
+export function alreadyRegisteredMessage(): string {
+  return t("auth.alreadyRegistered");
+}
 
 function isAlreadyRegisteredError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -90,7 +94,7 @@ export async function signInWithPassword(client: PasswordAuthClient, email: stri
     return { ok: false, message: authFailureMessage(error) };
   }
   if (!data?.session) {
-    return { ok: false, message: "Authentication did not return a workspace session." };
+    return { ok: false, message: t("auth.noSession") };
   }
 
   return { ok: true, session: data.session };
@@ -103,18 +107,18 @@ export async function signUpWithPassword(client: PasswordRegistrationClient, ema
   const { data, error } = await client.auth.signUp({ email: email.trim(), password });
   if (error) {
     if (isAlreadyRegisteredError(error)) {
-      return { ok: false, message: ALREADY_REGISTERED_MESSAGE };
+      return { ok: false, message: alreadyRegisteredMessage() };
     }
     return { ok: false, message: authFailureMessage(error) };
   }
   if (!data?.session) {
-    return { ok: false, message: "Account created. Verify your email, then sign in to enable cloud sync." };
+    return { ok: false, message: t("auth.signUpVerifyEmail") };
   }
   return { ok: true, session: data.session };
 }
 
 export async function requestPasswordReset(client: PasswordResetClient, email: string, redirectTo?: string): Promise<{ ok: boolean; message: string }> {
-  if (!email.trim()) return { ok: false, message: "Email is required." };
+  if (!email.trim()) return { ok: false, message: t("auth.emailRequired") };
   // Without redirectTo, Supabase links the reset email to its Site URL — the
   // live deployment configured in the dashboard — instead of whatever local
   // instance sent the request.
@@ -126,41 +130,41 @@ export async function requestPasswordReset(client: PasswordResetClient, email: s
       // platform limit clearly instead of a bare error string.
       return {
         ok: false,
-        message: "Email rate limit exceeded. Supabase's default email service allows only 2 emails per hour — try again later, or configure Custom SMTP in the Supabase dashboard to remove the cap.",
+        message: t("auth.rateLimited"),
       };
     }
     return { ok: false, message };
   }
-  return { ok: true, message: "Password reset link sent. Check your email." };
+  return { ok: true, message: t("auth.resetSent") };
 }
 
 export async function updatePassword(client: PasswordResetClient, password: string): Promise<{ ok: boolean; message: string }> {
-  if (!password.trim()) return { ok: false, message: "Password is required." };
+  if (!password.trim()) return { ok: false, message: t("auth.passwordRequired") };
   const { error } = await client.auth.updateUser({ password });
   return error
     ? { ok: false, message: authFailureMessage(error) }
-    : { ok: true, message: "Password updated. You can continue to cloud setup." };
+    : { ok: true, message: t("auth.passwordUpdated") };
 }
 
 export async function signInWithOAuth(client: OAuthClient, provider: OAuthProvider, redirectTo: string): Promise<{ ok: boolean; message: string }> {
   const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo } });
   return error
     ? { ok: false, message: authFailureMessage(error) }
-    : { ok: true, message: `Opening ${provider} sign-in...` };
+    : { ok: true, message: t("auth.oauthOpening", { provider }) };
 }
 
 export async function linkIdentity(client: IdentityLinkClient, provider: OAuthProvider, redirectTo: string): Promise<{ ok: boolean; message: string }> {
   const { error } = await client.auth.linkIdentity({ provider, options: { redirectTo } });
   return error
     ? { ok: false, message: authFailureMessage(error) }
-    : { ok: true, message: `Opening ${provider} sign-in...` };
+    : { ok: true, message: t("auth.oauthOpening", { provider }) };
 }
 
 export async function unlinkIdentity(client: IdentityLinkClient, identity: LinkedIdentity): Promise<{ ok: boolean; message: string }> {
   const { error } = await client.auth.unlinkIdentity(identity);
   return error
     ? { ok: false, message: authFailureMessage(error) }
-    : { ok: true, message: `${identity.provider} sign-in removed.` };
+    : { ok: true, message: t("auth.oauthRemoved", { provider: identity.provider }) };
 }
 
 export type OAuthCallbackResult =
@@ -200,7 +204,7 @@ export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, h
     const { data, error } = await client.auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
     if (error) return { handled: true, recovery: true, result: { ok: false, message: authFailureMessage(error) } };
     if (!data?.session) {
-      return { handled: true, recovery: true, result: { ok: false, message: "Authentication did not return a workspace session." } };
+      return { handled: true, recovery: true, result: { ok: false, message: t("auth.noSession") } };
     }
     return { handled: true, recovery: true, result: { ok: true, session: data.session } };
   }
@@ -209,7 +213,7 @@ export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, h
   const { data, error } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
   if (error) return { handled: true, recovery, result: { ok: false, message: authFailureMessage(error) } };
   if (!data?.session) {
-    return { handled: true, recovery, result: { ok: false, message: "Authentication did not return a workspace session." } };
+    return { handled: true, recovery, result: { ok: false, message: t("auth.noSession") } };
   }
   return { handled: true, recovery, result: { ok: true, session: data.session } };
 }

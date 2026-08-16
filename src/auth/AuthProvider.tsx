@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
+import { t } from "../i18n";
 import { authRedirectBaseUrl, isLocalDevelopmentMode, supabase } from "../lib/supabase";
 import { linkIdentity, recoverPasswordFromLink, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword, type LinkedIdentity, type OAuthProvider } from "./authActions";
 
@@ -25,11 +26,14 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Authentication failed. Try again.";
+  return error instanceof Error ? error.message : t("auth.fallback");
 }
 
 const configurationError = !isLocalDevelopmentMode && !supabase;
-const configurationMessage = "Cloud authentication is not configured for this deployment.";
+
+function configurationMessage(): string {
+  return t("auth.configurationError");
+}
 
 function useStableEffect(effect: EffectCallback, dependencies: DependencyList): void {
   useEffect(effect, dependencies);
@@ -94,7 +98,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
   const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState(configurationError ? configurationMessage : "");
+  const [message, setMessage] = useState(configurationError ? configurationMessage() : "");
   // While a recovery link is being restored, supabase-js may still emit the
   // stored session as INITIAL_SESSION or SIGNED_IN after the app has already
   // switched to the password-recovery view; those late events must not
@@ -192,7 +196,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
 
@@ -221,7 +225,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
 
@@ -241,12 +245,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setEmail(normalizedEmail);
       setMessage("");
       if (isLocalDevelopmentMode) {
-        setMessage("Password reset is available after cloud authentication is configured.");
+        setMessage(t("auth.resetNeedsConfig"));
         return;
       }
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
       const result = await requestPasswordReset(supabase, normalizedEmail, passwordResetRedirect());
@@ -256,18 +260,18 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     recoverPasswordFromLink: async (link = "") => {
       setMessage("");
       if (isLocalDevelopmentMode) {
-        setMessage("Password reset is available after cloud authentication is configured.");
+        setMessage(t("auth.resetNeedsConfig"));
         return;
       }
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
       const callback = await recoverPasswordFromLink(supabase, link.trim());
       if (!callback.handled) {
         setState("auth-error");
-        setMessage("That link does not contain a password reset. Paste the full reset link from your email.");
+        setMessage(t("auth.resetLinkInvalid"));
         return;
       }
       if (!callback.result.ok) {
@@ -286,7 +290,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     updatePassword: async (password = "") => {
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
       const result = await updatePassword(supabase, password);
@@ -301,12 +305,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     signInWithOAuth: async (provider) => {
       setMessage("");
       if (isLocalDevelopmentMode) {
-        setMessage(`${provider} sign-in is available after cloud authentication is configured.`);
+        setMessage(t("auth.oauthNeedsConfig", { provider }));
         return;
       }
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
       const result = await signInWithOAuth(supabase, provider, authRedirect());
@@ -317,12 +321,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     linkIdentity: async (provider) => {
       setMessage("");
       if (isLocalDevelopmentMode) {
-        setMessage(`Linking ${provider} is available after cloud authentication is configured.`);
+        setMessage(t("auth.linkNeedsConfig", { provider }));
         return;
       }
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
       const result = await linkIdentity(supabase, provider, authRedirect());
@@ -331,12 +335,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     unlinkIdentity: async (identity) => {
       setMessage("");
       if (isLocalDevelopmentMode) {
-        setMessage("Unlinking a sign-in method is available after cloud authentication is configured.");
+        setMessage(t("auth.unlinkNeedsConfig"));
         return;
       }
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
       const result = await unlinkIdentity(supabase, identity);
@@ -352,7 +356,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
       if (!supabase) {
         setState("auth-error");
-        setMessage(configurationMessage);
+        setMessage(configurationMessage());
         return;
       }
 

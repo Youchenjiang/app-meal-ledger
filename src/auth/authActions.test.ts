@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { ALREADY_REGISTERED_MESSAGE, linkIdentity, recoverPasswordFromLink, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
+import { alreadyRegisteredMessage, linkIdentity, recoverPasswordFromLink, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
 
 function passwordClient(signInWithPasswordMock = vi.fn(), signUpMock = vi.fn()) {
   return { auth: { signInWithPassword: signInWithPasswordMock, signUp: signUpMock } };
@@ -14,7 +14,7 @@ describe("password auth action", () => {
     const signInWithPasswordMock = vi.fn();
     const result = await signInWithPassword(passwordClient(signInWithPasswordMock), "  ", "password");
 
-    expect(result).toEqual({ ok: false, message: "Email is required." });
+    expect(result).toEqual({ ok: false, message: "請輸入電子郵件。" });
     expect(signInWithPasswordMock).not.toHaveBeenCalled();
   });
 
@@ -22,7 +22,7 @@ describe("password auth action", () => {
     const signInWithPasswordMock = vi.fn();
     const result = await signInWithPassword(passwordClient(signInWithPasswordMock), "user@example.com", "  ");
 
-    expect(result).toEqual({ ok: false, message: "Password is required." });
+    expect(result).toEqual({ ok: false, message: "請輸入密碼。" });
     expect(signInWithPasswordMock).not.toHaveBeenCalled();
   });
 
@@ -49,7 +49,7 @@ describe("password auth action", () => {
 
     await expect(signInWithPassword(passwordClient(signInWithPasswordMock), "user@example.com", "secret")).resolves.toEqual({
       ok: false,
-      message: "Authentication did not return a workspace session.",
+      message: "驗證未回傳工作區工作階段。",
     });
   });
 
@@ -67,7 +67,7 @@ describe("password auth action", () => {
 
     await expect(signUpWithPassword(passwordClient(vi.fn(), signUpMock), "dup@example.com", "secret")).resolves.toEqual({
       ok: false,
-      message: ALREADY_REGISTERED_MESSAGE,
+      message: alreadyRegisteredMessage(),
     });
   });
 
@@ -76,7 +76,7 @@ describe("password auth action", () => {
 
     await expect(signUpWithPassword(passwordClient(vi.fn(), signUpMock), "new@example.com", "secret")).resolves.toEqual({
       ok: false,
-      message: "Account created. Verify your email, then sign in to enable cloud sync.",
+      message: "帳戶已建立。請驗證電子郵件後登入,以啟用雲端同步。",
     });
   });
 
@@ -85,7 +85,7 @@ describe("password auth action", () => {
 
     await expect(requestPasswordReset(recoveryClient(resetMock), " user@example.com ", "https://app.test/settings")).resolves.toEqual({
       ok: true,
-      message: "Password reset link sent. Check your email.",
+      message: "重設密碼的連結已寄出,請檢查電子郵件。",
     });
     expect(resetMock).toHaveBeenCalledWith("user@example.com", { redirectTo: "https://app.test/settings" });
   });
@@ -95,7 +95,7 @@ describe("password auth action", () => {
 
     await expect(requestPasswordReset(recoveryClient(resetMock), "user@example.com")).resolves.toEqual({
       ok: true,
-      message: "Password reset link sent. Check your email.",
+      message: "重設密碼的連結已寄出,請檢查電子郵件。",
     });
     expect(resetMock).toHaveBeenCalledWith("user@example.com", {});
   });
@@ -105,14 +105,14 @@ describe("password auth action", () => {
 
     await expect(requestPasswordReset(recoveryClient(resetMock), "user@example.com")).resolves.toEqual({
       ok: false,
-      message: "Email rate limit exceeded. Supabase's default email service allows only 2 emails per hour — try again later, or configure Custom SMTP in the Supabase dashboard to remove the cap.",
+      message: "電子郵件超出頻率限制。Supabase 預設郵件服務每小時僅允許 2 封 — 請稍後再試,或在 Supabase 後台設定 Custom SMTP 以解除限制。",
     });
   });
 
   test("does not request a reset without an email", async () => {
     const resetMock = vi.fn();
 
-    await expect(requestPasswordReset(recoveryClient(resetMock), " ", "https://app.test/settings")).resolves.toEqual({ ok: false, message: "Email is required." });
+    await expect(requestPasswordReset(recoveryClient(resetMock), " ", "https://app.test/settings")).resolves.toEqual({ ok: false, message: "請輸入電子郵件。" });
     expect(resetMock).not.toHaveBeenCalled();
   });
 
@@ -121,7 +121,7 @@ describe("password auth action", () => {
 
     await expect(updatePassword(recoveryClient(vi.fn(), updateMock), "new-secret")).resolves.toEqual({
       ok: true,
-      message: "Password updated. You can continue to cloud setup.",
+      message: "密碼已更新,可以繼續進行雲端設定。",
     });
     expect(updateMock).toHaveBeenCalledWith({ password: "new-secret" });
   });
@@ -131,7 +131,7 @@ describe("password auth action", () => {
 
     await expect(signInWithOAuth({ auth: { signInWithOAuth: signInWithOAuthMock } }, "google", "https://app.test/settings")).resolves.toEqual({
       ok: true,
-      message: "Opening google sign-in...",
+      message: "正在開啟 google 登入…",
     });
     expect(signInWithOAuthMock).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: "https://app.test/settings" } });
   });
@@ -233,7 +233,7 @@ describe("password auth action", () => {
     await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery")).resolves.toEqual({
       handled: true,
       recovery: true,
-      result: { ok: false, message: "Authentication did not return a workspace session." },
+      result: { ok: false, message: "驗證未回傳工作區工作階段。" },
     });
   });
 
@@ -250,7 +250,7 @@ describe("password auth action", () => {
 
     await expect(linkIdentity(client, "facebook", "https://app.test/account")).resolves.toEqual({
       ok: true,
-      message: "Opening facebook sign-in...",
+      message: "正在開啟 facebook 登入…",
     });
     expect(linkIdentityMock).toHaveBeenCalledWith({ provider: "facebook", options: { redirectTo: "https://app.test/account" } });
   });
@@ -272,7 +272,7 @@ describe("password auth action", () => {
 
     await expect(unlinkIdentity(client, identity)).resolves.toEqual({
       ok: true,
-      message: "google sign-in removed.",
+      message: "已移除 google 登入。",
     });
     expect(unlinkIdentityMock).toHaveBeenCalledWith(identity);
   });

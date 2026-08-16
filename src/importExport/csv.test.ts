@@ -17,9 +17,9 @@ describe("CSV import validation", () => {
   });
 
   test("rejects invalid UTF-8, malformed rows, and unsupported headers", () => {
-    expect(validateCsvBytes(new Uint8Array([0xff, 0xfe])).errors).toContain("CSV file must be valid UTF-8.");
-    expect(validateCsvText("unknown,other\nvalue\n").errors).toContain("CSV headers do not contain a supported ledger field.");
-    expect(validateCsvText("date,amount\n2026-07-13,417,extra\n").errors).toContain("Row 2 has 3 fields; expected 2.");
+    expect(validateCsvBytes(new Uint8Array([0xff, 0xfe])).errors).toContain("CSV 檔案必須是有效的 UTF-8。");
+    expect(validateCsvText("unknown,other\nvalue\n").errors).toContain("CSV 標題未包含受支援的明細欄位。");
+    expect(validateCsvText("date,amount\n2026-07-13,417,extra\n").errors).toContain("第 2 列有 3 個欄位;預期 2 個。");
   });
 
   test("rejects files above the row limit before processing", () => {
@@ -27,7 +27,7 @@ describe("CSV import validation", () => {
     const result = validateCsvText(csv);
 
     expect(result.ok).toBe(false);
-    expect(result.errors).toContain(`CSV file exceeds ${csvImportLimits.maxRows} data rows.`);
+    expect(result.errors).toContain(`CSV 檔案超過 ${csvImportLimits.maxRows} 列資料上限。`);
     expect(result.rowCount).toBe(csvImportLimits.maxRows + 1);
   });
 });

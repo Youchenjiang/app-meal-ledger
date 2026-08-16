@@ -17,7 +17,9 @@ export type AuthState = "loading" | "signed-out" | "signed-in" | "password-recov
 
 export type NavItem = {
   route: Exclude<AppRoute, "not-found">;
-  label: string;
+  // Copy dictionary key resolved at render time so the navigation labels
+  // follow the selected locale (see src/i18n).
+  labelKey: string;
   path: string;
   icon: LucideIcon;
 };

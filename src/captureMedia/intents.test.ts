@@ -14,6 +14,6 @@ describe("capture intents", () => {
   });
 
   test("provides a stable label for each entry point", () => {
-    expect(captureIntentLabel("record-meal")).toBe("Record meal");
+    expect(captureIntentLabel("record-meal")).toBe("記錄餐點");
   });
 });

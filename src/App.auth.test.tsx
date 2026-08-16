@@ -1,5 +1,5 @@
 import { act, render, screen, within } from "@testing-library/react";
-import { ALREADY_REGISTERED_MESSAGE } from "./auth/authActions";
+import { alreadyRegisteredMessage } from "./auth/authActions";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -28,8 +28,12 @@ async function renderRemoteApp(authMock = createAuthMock()) {
     supabase: { auth: authMock },
     authRedirectBaseUrl: "",
   }));
+  // Imported from the same (reset) module registry as App so the i18n
+  // context is shared; a static import would reference a different module
+  // instance after vi.resetModules and break useI18n.
   const { App } = await import("./App");
-  return { authMock, view: render(<App />) };
+  const { LanguageProvider } = await import("./i18n/react");
+  return { authMock, view: render(<LanguageProvider><App /></LanguageProvider>) };
 }
 
 async function openAccountPage(user: ReturnType<typeof userEvent.setup>) {
@@ -54,8 +58,8 @@ describe("app auth boundary", () => {
   test("opens the local workspace without a sign-in gate", async () => {
     await renderRemoteApp();
 
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Set up your first account" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "概覽" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "建立你的第一個帳戶" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /open workspace/i })).not.toBeInTheDocument();
   });
 
@@ -64,22 +68,22 @@ describe("app auth boundary", () => {
     const { authMock } = await renderRemoteApp();
 
     await openAccountPage(user);
-    expect(screen.getByRole("heading", { name: "Optional cloud sync" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "選用雲端同步" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/settings");
-    expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(screen.getByLabelText("Password")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue with Facebook" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Forgot password?" })).toBeInTheDocument();
+    expect(screen.getByLabelText("電子郵件")).toBeInTheDocument();
+    expect(screen.getByLabelText("密碼")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "繼續" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "使用 Google 繼續" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "使用 Facebook 繼續" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "忘記密碼?" })).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Email"), "user@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.type(screen.getByLabelText("電子郵件"), "user@example.com");
+    await user.type(screen.getByLabelText("密碼"), "secret");
+    await user.click(screen.getByRole("button", { name: "繼續" }));
 
     expect(authMock.signInWithPassword).toHaveBeenCalledWith({ email: "user@example.com", password: "secret" });
-    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Local data handoff summary")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "確認雲端交接" })).toBeInTheDocument();
+    expect(screen.getByLabelText("本機資料交接摘要")).toBeInTheDocument();
   });
 
   test("confirms local data handoff from the dedicated account route", async () => {
@@ -87,14 +91,14 @@ describe("app auth boundary", () => {
     await renderRemoteApp();
 
     await openAccountPage(user);
-    await user.type(screen.getByLabelText("Email"), "user@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Local data handoff summary")).toHaveTextContent("Accounts0Records0Drafts0Meals0Media0");
+    await user.type(screen.getByLabelText("電子郵件"), "user@example.com");
+    await user.type(screen.getByLabelText("密碼"), "secret");
+    await user.click(screen.getByRole("button", { name: "繼續" }));
+    expect(await screen.findByRole("button", { name: "確認雲端交接" })).toBeInTheDocument();
+    expect(screen.getByLabelText("本機資料交接摘要")).toHaveTextContent("帳戶0記錄0草稿0餐點0媒體0");
 
-    await user.click(screen.getByRole("button", { name: "Confirm cloud handoff" }));
-    expect(await screen.findByText("Cloud sync is enabled for this workspace.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確認雲端交接" }));
+    expect(await screen.findByText("此工作區已啟用雲端同步。")).toBeInTheDocument();
   });
 
   test("links and unlinks provider identities from the signed-in account", async () => {
@@ -117,22 +121,22 @@ describe("app auth boundary", () => {
     await renderRemoteApp(authMock);
 
     await openAccountPage(user);
-    await user.type(screen.getByLabelText("Email"), "user@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-    await user.click(await screen.findByRole("button", { name: "Confirm cloud handoff" }));
-    await screen.findByText("Cloud sync is enabled for this workspace.");
+    await user.type(screen.getByLabelText("電子郵件"), "user@example.com");
+    await user.type(screen.getByLabelText("密碼"), "secret");
+    await user.click(screen.getByRole("button", { name: "繼續" }));
+    await user.click(await screen.findByRole("button", { name: "確認雲端交接" }));
+    await screen.findByText("此工作區已啟用雲端同步。");
 
-    const methods = screen.getByRole("group", { name: "Sign-in methods" });
-    expect(within(methods).getByText("Email & password")).toBeInTheDocument();
-    expect(within(methods).getByText("Primary")).toBeInTheDocument();
-    expect(within(methods).getByRole("button", { name: "Unlink" })).toBeInTheDocument();
-    expect(within(methods).getByRole("button", { name: "Link Facebook" })).toBeInTheDocument();
+    const methods = screen.getByRole("group", { name: "登入方式" });
+    expect(within(methods).getByText("電子郵件與密碼")).toBeInTheDocument();
+    expect(within(methods).getByText("主要")).toBeInTheDocument();
+    expect(within(methods).getByRole("button", { name: "解除連結" })).toBeInTheDocument();
+    expect(within(methods).getByRole("button", { name: "連結 Facebook" })).toBeInTheDocument();
 
-    await user.click(within(methods).getByRole("button", { name: "Unlink" }));
+    await user.click(within(methods).getByRole("button", { name: "解除連結" }));
     expect(authMock.unlinkIdentity).toHaveBeenCalledWith({ id: "google-1", user_id: "remote-user", identity_id: "google-1", provider: "google" });
 
-    await user.click(within(methods).getByRole("button", { name: "Link Facebook" }));
+    await user.click(within(methods).getByRole("button", { name: "連結 Facebook" }));
     expect(authMock.linkIdentity).toHaveBeenCalledWith({ provider: "facebook", options: { redirectTo: `${window.location.origin}/account` } });
   });
 
@@ -150,12 +154,12 @@ describe("app auth boundary", () => {
     await openAccountPage(user);
     act(() => authListener("PASSWORD_RECOVERY", { user: { id: "remote-user" } }));
 
-    expect(screen.getByLabelText("New password")).toBeInTheDocument();
-    await user.type(screen.getByLabelText("New password"), "new-secret");
-    await user.click(screen.getByRole("button", { name: "Set new password" }));
+    expect(screen.getByLabelText("新密碼")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("新密碼"), "new-secret");
+    await user.click(screen.getByRole("button", { name: "設定新密碼" }));
 
     expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
-    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "確認雲端交接" })).toBeInTheDocument();
   });
 
   test("lands a password-recovery link on the new-password form instead of signing in", async () => {
@@ -167,15 +171,15 @@ describe("app auth boundary", () => {
     await renderRemoteApp(authMock);
 
     expect(authMock.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
-    expect(await screen.findByLabelText("New password")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Set new password" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirm cloud handoff" })).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("新密碼")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "設定新密碼" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "確認雲端交接" })).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("New password"), "new-secret");
-    await user.click(screen.getByRole("button", { name: "Set new password" }));
+    await user.type(screen.getByLabelText("新密碼"), "new-secret");
+    await user.click(screen.getByRole("button", { name: "設定新密碼" }));
 
     expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
-    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "確認雲端交接" })).toBeInTheDocument();
   });
 
   test("reveals and masks the sign-in password with the visibility toggle", async () => {
@@ -184,18 +188,18 @@ describe("app auth boundary", () => {
 
     await openAccountPage(user);
 
-    const passwordInput = screen.getByLabelText("Password");
+    const passwordInput = screen.getByLabelText("密碼");
     expect(passwordInput).toHaveAttribute("type", "password");
     await user.type(passwordInput, "secret");
 
-    await user.click(screen.getByRole("button", { name: "Show password" }));
-    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
-    expect(screen.getByLabelText("Password")).toHaveValue("secret");
-    expect(screen.getByRole("button", { name: "Hide password" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "顯示密碼" }));
+    expect(screen.getByLabelText("密碼")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("密碼")).toHaveValue("secret");
+    expect(screen.getByRole("button", { name: "隱藏密碼" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Hide password" }));
-    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
-    expect(screen.getByLabelText("Password")).toHaveValue("secret");
+    await user.click(screen.getByRole("button", { name: "隱藏密碼" }));
+    expect(screen.getByLabelText("密碼")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("密碼")).toHaveValue("secret");
   });
 
   test("reveals and masks the new password field during recovery", async () => {
@@ -211,18 +215,18 @@ describe("app auth boundary", () => {
     await openAccountPage(user);
     act(() => authListener("PASSWORD_RECOVERY", { user: { id: "remote-user" } }));
 
-    const newPasswordInput = screen.getByLabelText("New password");
+    const newPasswordInput = screen.getByLabelText("新密碼");
     expect(newPasswordInput).toHaveAttribute("type", "password");
     await user.type(newPasswordInput, "new-secret");
 
-    await user.click(screen.getByRole("button", { name: "Show password" }));
-    expect(screen.getByLabelText("New password")).toHaveAttribute("type", "text");
-    expect(screen.getByLabelText("New password")).toHaveValue("new-secret");
-    expect(screen.getByRole("button", { name: "Hide password" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "顯示密碼" }));
+    expect(screen.getByLabelText("新密碼")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("新密碼")).toHaveValue("new-secret");
+    expect(screen.getByRole("button", { name: "隱藏密碼" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Hide password" }));
-    expect(screen.getByLabelText("New password")).toHaveAttribute("type", "password");
-    expect(screen.getByLabelText("New password")).toHaveValue("new-secret");
+    await user.click(screen.getByRole("button", { name: "隱藏密碼" }));
+    expect(screen.getByLabelText("新密碼")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("新密碼")).toHaveValue("new-secret");
   });
 
   test("switches to a dedicated sign-up view and creates an account", async () => {
@@ -231,13 +235,13 @@ describe("app auth boundary", () => {
     authMock.signUp = vi.fn().mockResolvedValue({ data: { session: { user: { id: "new-user" } } }, error: null });
 
     await openAccountPage(user);
-    await user.click(screen.getByRole("radio", { name: "Create account" }));
+    await user.click(screen.getByRole("radio", { name: "建立帳戶" }));
 
-    expect(screen.getByLabelText("Confirm password")).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Email"), "new@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret");
-    await user.type(screen.getByLabelText("Confirm password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(screen.getByLabelText("確認密碼")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("電子郵件"), "new@example.com");
+    await user.type(screen.getByLabelText("密碼"), "secret");
+    await user.type(screen.getByLabelText("確認密碼"), "secret");
+    await user.click(screen.getByRole("button", { name: "建立帳戶" }));
 
     expect(authMock.signUp).toHaveBeenCalledWith({ email: "new@example.com", password: "secret" });
   });
@@ -248,16 +252,16 @@ describe("app auth boundary", () => {
     authMock.signUp = vi.fn().mockResolvedValue({ data: null, error: new Error("User already registered") });
 
     await openAccountPage(user);
-    await user.click(screen.getByRole("radio", { name: "Create account" }));
-    await user.type(screen.getByLabelText("Email"), "dup@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret");
-    await user.type(screen.getByLabelText("Confirm password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await user.click(screen.getByRole("radio", { name: "建立帳戶" }));
+    await user.type(screen.getByLabelText("電子郵件"), "dup@example.com");
+    await user.type(screen.getByLabelText("密碼"), "secret");
+    await user.type(screen.getByLabelText("確認密碼"), "secret");
+    await user.click(screen.getByRole("button", { name: "建立帳戶" }));
 
     expect(authMock.signUp).toHaveBeenCalledWith({ email: "dup@example.com", password: "secret" });
-    expect(await screen.findByText(ALREADY_REGISTERED_MESSAGE)).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Sign in" })).toBeChecked();
-    expect(screen.getByLabelText("Email")).toHaveValue("dup@example.com");
+    expect(await screen.findByText(alreadyRegisteredMessage())).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "登入" })).toBeChecked();
+    expect(screen.getByLabelText("電子郵件")).toHaveValue("dup@example.com");
   });
 
   test("rejects mismatched passwords before calling Supabase", async () => {
@@ -265,13 +269,13 @@ describe("app auth boundary", () => {
     const { authMock } = await renderRemoteApp();
 
     await openAccountPage(user);
-    await user.click(screen.getByRole("radio", { name: "Create account" }));
-    await user.type(screen.getByLabelText("Email"), "new@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret");
-    await user.type(screen.getByLabelText("Confirm password"), "different");
-    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await user.click(screen.getByRole("radio", { name: "建立帳戶" }));
+    await user.type(screen.getByLabelText("電子郵件"), "new@example.com");
+    await user.type(screen.getByLabelText("密碼"), "secret");
+    await user.type(screen.getByLabelText("確認密碼"), "different");
+    await user.click(screen.getByRole("button", { name: "建立帳戶" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Passwords do not match.");
+    expect(screen.getByRole("alert")).toHaveTextContent("兩次輸入的密碼不一致。");
     expect(authMock.signUp).not.toHaveBeenCalled();
   });
 
@@ -281,14 +285,14 @@ describe("app auth boundary", () => {
     authMock.resetPasswordForEmail = vi.fn().mockResolvedValue({ error: null });
 
     await openAccountPage(user);
-    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.click(screen.getByRole("button", { name: "忘記密碼?" }));
 
-    expect(screen.getByRole("button", { name: "Send reset link" })).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Email"), "user@example.com");
-    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(screen.getByRole("button", { name: "寄送重設連結" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("電子郵件"), "user@example.com");
+    await user.click(screen.getByRole("button", { name: "寄送重設連結" }));
 
     expect(authMock.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", expect.anything());
-    expect(await screen.findByText("Password reset link sent. Check your email.")).toBeInTheDocument();
+    expect(await screen.findByText("重設密碼的連結已寄出,請檢查電子郵件。")).toBeInTheDocument();
   });
 
   test("finishes password recovery from a reset link pasted into the forgot-password view", async () => {
@@ -298,24 +302,24 @@ describe("app auth boundary", () => {
 
     await renderRemoteApp(authMock);
     await openAccountPage(user);
-    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.click(screen.getByRole("button", { name: "忘記密碼?" }));
 
     // The paste-a-link rescue stays collapsed by default (progressive
     // disclosure) so it does not compete with the primary reset action.
-    expect(screen.queryByLabelText("Reset link")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Paste it here/ }));
-    expect(screen.getByLabelText("Reset link")).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Reset link"), "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery");
-    await user.click(screen.getByRole("button", { name: "Use reset link" }));
+    expect(screen.queryByLabelText("重設連結")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /在此貼上/ }));
+    expect(screen.getByLabelText("重設連結")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("重設連結"), "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery");
+    await user.click(screen.getByRole("button", { name: "使用重設連結" }));
 
     expect(authMock.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
-    expect(await screen.findByLabelText("New password")).toBeInTheDocument();
+    expect(await screen.findByLabelText("新密碼")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("New password"), "new-secret");
-    await user.click(screen.getByRole("button", { name: "Set new password" }));
+    await user.type(screen.getByLabelText("新密碼"), "new-secret");
+    await user.click(screen.getByRole("button", { name: "設定新密碼" }));
 
     expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
-    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "確認雲端交接" })).toBeInTheDocument();
   });
 
   test("finishes password recovery from a pasted PKCE token_hash reset link", async () => {
@@ -326,13 +330,13 @@ describe("app auth boundary", () => {
 
     await renderRemoteApp(authMock);
     await openAccountPage(user);
-    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.click(screen.getByRole("button", { name: "忘記密碼?" }));
 
-    await user.click(screen.getByRole("button", { name: /Paste it here/ }));
-    await user.type(screen.getByLabelText("Reset link"), "https://app.test/account?token_hash=pkce-hash&type=recovery");
-    await user.click(screen.getByRole("button", { name: "Use reset link" }));
+    await user.click(screen.getByRole("button", { name: /在此貼上/ }));
+    await user.type(screen.getByLabelText("重設連結"), "https://app.test/account?token_hash=pkce-hash&type=recovery");
+    await user.click(screen.getByRole("button", { name: "使用重設連結" }));
 
     expect(authMock.verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "pkce-hash" });
-    expect(await screen.findByLabelText("New password")).toBeInTheDocument();
+    expect(await screen.findByLabelText("新密碼")).toBeInTheDocument();
   });
 });
