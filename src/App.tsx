@@ -50,7 +50,7 @@ import { toImportedTransactionDraft } from "./importExport/recordDraft";
 import { detectImportDuplicates, type ImportDuplicate } from "./importExport/duplicates";
 import { createInitialFundingDraft } from "./onboarding/initialFunding";
 import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/defaults";
-import { captureIntentDetail, captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
+import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
 import { createMealEntry, type MealEntry } from "./captureMedia/meals";
 import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retainTemporaryScan, type TemporaryScan } from "./captureMedia/media";
 import { queueUploadFiles, uploadMediaFile, validateMediaBatch, type SignedUploadClient, type UploadQueueItem } from "./captureMedia/upload";
@@ -2854,7 +2854,6 @@ function CaptureStartPanel({
           <p className="eyebrow">{t("capture.quickEyebrow")}</p>
           <h2 id="capture-start-title">{t("capture.whatToRecord")}</h2>
         </div>
-        <p className="capture-start-detail">{captureIntentDetail(captureIntent)}</p>
       </div>
       <div className="capture-intent-picker" role="toolbar" aria-label={t("capture.intentPickerAria")}>
         {captureIntents.map((action) => {

@@ -281,17 +281,11 @@ export const enUS: Record<string, string> = {
 
   // --- capture intents ---
   "capture.intent.manualLedger": "Manual ledger",
-  "capture.intent.manualLedgerDetail": "Record an expense, income, transfer, refund, or adjustment.",
   "capture.intent.aiLedger": "AI ledger",
-  "capture.intent.aiLedgerDetail": "Prefill a draft from voice, text, or a receipt photo; confirm before writing.",
   "capture.intent.scanInvoice": "Scan invoice",
-  "capture.intent.scanInvoiceDetail": "Keep an invoice scan as an auditable source; confirm before writing to the ledger.",
   "capture.intent.scanReceipt": "Scan receipt",
-  "capture.intent.scanReceiptDetail": "Keep a receipt scan as an auditable source; confirm before writing to the ledger.",
   "capture.intent.recordMeal": "Record meal",
-  "capture.intent.recordMealDetail": "Record a meal, optionally with photos; link it to ledger entries later.",
   "capture.intent.attachPhoto": "Attach photos",
-  "capture.intent.attachPhotoDetail": "Keep supporting evidence separate from clean ledger exports.",
   "capture.intent.fallback": "Add",
 
   // --- manual ledger form ---

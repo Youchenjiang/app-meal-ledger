@@ -1457,12 +1457,6 @@ h2 {
   font-size: 24px;
 }
 
-.capture-start-detail {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-
 .capture-intent-picker {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

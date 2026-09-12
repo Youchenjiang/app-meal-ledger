@@ -282,17 +282,11 @@ export const zhTW: Record<string, string> = {
 
   // --- capture intents ---
   "capture.intent.manualLedger": "手動明細",
-  "capture.intent.manualLedgerDetail": "儲存一筆支出、收入、轉帳、退款或調整。",
   "capture.intent.aiLedger": "AI 補帳",
-  "capture.intent.aiLedgerDetail": "用語音、文字或收據照片預填明細草稿,確認後寫入。",
   "capture.intent.scanInvoice": "掃描發票",
-  "capture.intent.scanInvoiceDetail": "保留發票掃描作為可審核的來源,確認後寫入明細。",
   "capture.intent.scanReceipt": "掃描收據",
-  "capture.intent.scanReceiptDetail": "保留收據掃描作為可審核的來源,確認後寫入明細。",
   "capture.intent.recordMeal": "記錄餐點",
-  "capture.intent.recordMealDetail": "記錄餐點,可附照片,之後可選與明細連結。",
   "capture.intent.attachPhoto": "附加照片",
-  "capture.intent.attachPhotoDetail": "保留佐證資料,與乾淨的明細匯出分開。",
   "capture.intent.fallback": "新增",
 
   // --- manual ledger form ---
