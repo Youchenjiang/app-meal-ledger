@@ -53,8 +53,7 @@ test("completes a mode B capture from typed fields and saves an official record"
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "明細", exact: true }).click();
-  await page.getByRole("tab", { name: "帳戶", exact: true }).click();
+  await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByLabel("帳戶名稱").fill("Daily wallet");
   await page.getByRole("button", { name: "新增帳戶" }).click();
   await expect(page.getByLabel("可用帳戶")).toContainText("Daily wallet");

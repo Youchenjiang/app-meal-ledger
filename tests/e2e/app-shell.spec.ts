@@ -19,8 +19,7 @@ async function openWorkspace(page: Page) {
 }
 
 async function addAccount(page: Page, name: string) {
-  await page.getByRole("button", { name: "明細", exact: true }).click();
-  await page.getByRole("tab", { name: "帳戶", exact: true }).click();
+  await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByLabel("帳戶名稱").fill(name);
   await page.getByRole("button", { name: "新增帳戶" }).click();
   await expect(page.getByLabel("可用帳戶")).toContainText(name);
@@ -70,6 +69,49 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
   await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
   await expect(page.getByLabel("已確認的明細記錄")).toContainText("全聯");
   await expect(page.getByText("尚無已確認的明細記錄。")).not.toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("keeps compact ledger rows readable at 320px", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+  await page.setViewportSize({ width: 320, height: 900 });
+
+  await openWorkspace(page);
+  await addAccount(page, "Daily wallet");
+  await page.getByRole("button", { name: "專區" }).click();
+  await page.getByLabel("帳戶", { exact: true }).selectOption("Daily wallet");
+  await page.getByLabel("類別", { exact: true }).selectOption("日用");
+  await page.getByLabel("商家", { exact: true }).fill("這是一個非常非常長的商家名稱用來測試省略號截斷效果是否正常運作");
+  await page.getByLabel("品項名稱", { exact: true }).fill("香蕉");
+  await page.getByLabel("金額", { exact: true }).fill("417");
+  await page.getByRole("button", { name: "儲存記錄" }).click();
+  await page.getByRole("button", { name: "開啟明細" }).click();
+
+  await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  const card = page.locator(".ledger-record-card");
+  await expect(card).toHaveCount(1);
+  await expectNoHorizontalOverflow(page);
+
+  const metrics = await card.evaluateAll((cards) => cards.map((element) => {
+    const cardBox = element.getBoundingClientRect();
+    const name = element.querySelector(".record-name")?.getBoundingClientRect();
+    const meta = element.querySelector(".record-meta")?.getBoundingClientRect();
+    const iconTops = [...element.querySelectorAll(".record-actions button")].map((button) => Math.round(button.getBoundingClientRect().top));
+    return {
+      rowHeight: cardBox.height,
+      nameWidth: Math.round(name?.width ?? 0),
+      metaWidth: Math.round(meta?.width ?? 0),
+      iconRows: new Set(iconTops).size,
+    };
+  }));
+  // The name must stay visible (it collapsed to 0px before the two-line layout).
+  expect(metrics[0].nameWidth).toBeGreaterThan(50);
+  // The secondary meta line must also be visible, not starved to nothing.
+  expect(metrics[0].metaWidth).toBeGreaterThan(50);
+  // The three icon actions must stay on a single row.
+  expect(metrics[0].iconRows).toBe(1);
+  // At 320px a row may wrap to two lines but never more.
+  expect(metrics[0].rowHeight).toBeLessThan(100);
   expect(errors).toEqual([]);
 });
 
@@ -162,7 +204,6 @@ test("switches the theme from 相關設定 and persists it across reloads", asyn
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "設定", exact: true }).click();
-  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
   await page.getByRole("radio", { name: "淺色", exact: true }).click();
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -171,7 +212,6 @@ test("switches the theme from 相關設定 and persists it across reloads", asyn
 
   // Restore the default 深色 choice so the rest of the suite is unaffected.
   await page.getByRole("button", { name: "設定", exact: true }).click();
-  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
   await page.getByRole("radio", { name: "深色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   expect(errors).toEqual([]);
@@ -269,9 +309,8 @@ test("keeps compact navigation stable near its breakpoint", async ({ page }) => 
   await page.setViewportSize({ width: 720, height: 900 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "明細", exact: true }).click();
-  await page.getByRole("tab", { name: "帳戶", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "明細帳戶", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);

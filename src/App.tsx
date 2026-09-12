@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import {
   AlertCircle,
+  ArrowDownUp,
   Banknote,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Cloud,
   CloudOff,
   Eye,
@@ -15,7 +17,10 @@ import {
   LayoutGrid,
   LogIn,
   LogOut,
+  Pencil,
   Plus,
+  Search,
+  Trash2,
   UserPlus,
   ReceiptText,
   Settings,
@@ -23,6 +28,7 @@ import {
   Upload,
   Wifi,
   WifiOff,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
@@ -31,7 +37,7 @@ import { alreadyRegisteredMessage, type LinkedIdentity, type OAuthProvider } fro
 import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type RecurrenceAmountMode, type RecurrenceChoice, type TransactionDraft } from "./appShell/drafts";
 import { applyResolvedTheme, readStoredTheme, resolveTheme, writeStoredTheme, type ThemeMode } from "./appShell/theme";
 import { t } from "./i18n";
 import { useI18n } from "./i18n/react";
@@ -116,10 +122,6 @@ function localDateTime(): string {
 
 function countLabel(count: number, label: string): string {
   return `${count} ${label}`;
-}
-
-function metricDetail(count: number, populated: string, empty: string): string {
-  return count > 0 ? populated : empty;
 }
 
 function timePrecisionLabel(precision: DraftForm["timePrecision"]): string {
@@ -436,16 +438,65 @@ function recordDisplayName(record: LocalLedgerRecord): string {
   return record.kind === "transfer" ? t("app.recordTransfer", { account: record.accountName, target: record.transferAccountName || t("common.destination") }) : record.counterparty || record.reason || record.kind;
 }
 
-function recordDetailLine(record: LocalLedgerRecord): string {
+// The row title leads with the purchased item (品項) when one exists; the
+// merchant/source stays visible as the second line of the name cell.
+function recordTitle(record: LocalLedgerRecord): string {
+  if (record.itemName && !record.itemNameMissing) return record.itemName;
+  return recordDisplayName(record);
+}
+
+// The row shows a compact MM/DD in its own narrow cell; the meta line keeps
+// the filterable dimensions (account · category) visible instead of spending
+// its space on a full date.
+function recordShortDate(record: LocalLedgerRecord): string {
+  const value = record.localDate || record.periodStart || record.periodEnd;
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[2]}/${match[3]}` : value;
+}
+
+// V1 recurrence has no frequency field: the next cycle is one month after the
+// record date, clamped to the last valid day of the target month when the day
+// does not exist there (accounting-rules.md: monthly recurrence on the 29th,
+// 30th, or 31st falls back to the last valid day).
+function addMonthsClamped(dateStr: string, months: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return dateStr;
+  const target = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+}
+
+function shortDateOf(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[2]}/${match[3]}` : null;
+}
+
+// The MM/DD of the next scheduled occurrence, matching the row's date style.
+function nextCycleShortDate(record: LocalLedgerRecord): string | null {
+  const base = record.localDate || record.periodStart;
+  return base ? shortDateOf(addMonthsClamped(base, 1)) : null;
+}
+
+function recordMetaLine(record: LocalLedgerRecord): string {
   if (record.kind === "transfer") {
-    return t("app.detailTransfer", { date: record.localDate, account: record.accountName, target: record.transferAccountName || t("common.destination") });
+    return t("app.metaTransfer", { account: record.accountName, target: record.transferAccountName || t("common.destination") });
   }
 
   if (record.kind === "fund-addition") {
-    return t("app.detailFundAddition", { date: record.localDate, account: record.accountName, reason: record.reason || t("common.initialFunding") });
+    return t("app.metaFundAddition", { account: record.accountName, reason: record.reason || t("common.initialFunding") });
   }
 
-  return t("app.detailDefault", { date: record.localDate, account: record.accountName, category: record.category || record.reason || t("common.needCategory") });
+  return t("app.metaDefault", { account: record.accountName, category: record.category || record.reason || t("common.needCategory") });
+}
+
+// Opening balances (期初餘額) are the account's starting point, not a
+// transaction: they are excluded from the ledger history and surfaced on the
+// account report card instead. All account-setup flows create them through
+// createInitialFundingDraft without a source, so the counterparty is always
+// the hard-coded "Initial funds" marker.
+function isOpeningBalance(record: LocalLedgerRecord): boolean {
+  return record.kind === "fund-addition" && record.counterparty === "Initial funds";
 }
 
 function syncTargetLabel(target: CloudSyncQueueItem["target"]): string {
@@ -535,6 +586,7 @@ function readStoredDrafts(): TransactionDraft[] {
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon; hideInShell?: boolean };
 type HandoffCounts = { accounts: number; records: number; drafts: number; meals: number; media: number };
 type AccountPageProps = Readonly<{
+  headingId?: string;
   authState: AuthState;
   authMessage: string;
   cloudDataOwnerMatches: boolean;
@@ -1344,6 +1396,7 @@ function AuthenticatedApp() {
           records,
           setRecords,
           setAuditEvents,
+          setCloudSyncQueue,
           queueRecordBundle,
           cloudSyncIssues: cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"),
           onRetryCloudSyncItem: (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())),
@@ -1561,6 +1614,7 @@ type RouteRenderContext = {
   records: LocalLedgerRecord[];
   setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>;
   setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>;
+  setCloudSyncQueue: Dispatch<SetStateAction<CloudSyncQueueItem[]>>;
   queueRecordBundle: (records: LocalLedgerRecord[]) => void;
   cloudSyncIssues: CloudSyncQueueItem[];
   onRetryCloudSyncItem: (id: string) => void;
@@ -1616,6 +1670,7 @@ function renderRoute({
   records,
   setRecords,
   setAuditEvents,
+  setCloudSyncQueue,
   queueRecordBundle,
   cloudSyncIssues,
   onRetryCloudSyncItem,
@@ -1659,6 +1714,13 @@ function renderRoute({
   const recordCount = records.length;
   const recordOwner = authState === "signed-in" && cloudDataOwnerMatches && userId !== "local-user" ? userId : "local-user";
 
+  // A draft that is discarded or confirmed into a record no longer exists
+  // locally, so its cloud-sync entry has nothing left to sync. Drop it right
+  // away (the engine also drops it defensively) to keep the queue clean.
+  const pruneDraftSyncItem = (draftId: string) => {
+    setCloudSyncQueue((current) => current.filter((item) => item.target !== "draft" || item.targetId !== draftId));
+  };
+
   const saveOfficialRecord = (
     draft: TransactionDraft,
     recordAccounts: LocalAccount[],
@@ -1693,16 +1755,18 @@ function renderRoute({
 
   switch (route) {
     case "overview":
-      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} navigate={navigate} />;
+      return <OverviewPage accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} />;
     case "ledger":
       return (
         <LedgerPage
           records={records}
           drafts={drafts}
-          accounts={accounts}
           navigate={navigate}
           deleteAction={deleteAction}
-          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          onDiscardDraft={(id) => {
+            setDrafts((current) => current.filter((draft) => draft.id !== id));
+            pruneDraftSyncItem(id);
+          }}
           onEditDraft={(draft) => {
             // Draft completion needs the manual ledger form, which now lives
             // on the Zone page; 新增 is the voice-capture flow.
@@ -1715,6 +1779,7 @@ function renderRoute({
             }
 
             setDrafts((current) => current.filter((item) => item.id !== draft.id));
+            pruneDraftSyncItem(draft.id);
             return true;
           }}
           onUpdateRecord={(id, patch) => {
@@ -1753,6 +1818,9 @@ function renderRoute({
               const deletedIds = new Set(records.filter((item) => item.id === id || item.linkedRecordId === id).map((item) => item.id));
               setRecords((current) => current.filter((item) => !deletedIds.has(item.id)));
               setAuditEvents((current) => current.filter((event) => !deletedIds.has(event.targetId)));
+              // Drop pending/failed sync entries for the removed records so the
+              // queue does not keep failing on records that no longer exist.
+              setCloudSyncQueue((current) => current.filter((item) => item.target !== "record" || !deletedIds.has(item.targetId)));
               return;
             }
 
@@ -1760,9 +1828,6 @@ function renderRoute({
             setRecords((current) => current.map((item) => item.id === id ? result.record : item));
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
-          onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`) === null}
-          onReopenOnboarding={onReopenOnboarding}
         />
       );
     case "capture":
@@ -1791,7 +1856,10 @@ function renderRoute({
           draftToEdit={draftToEdit}
           customCategories={customCategories}
           setCustomCategories={setCustomCategories}
-          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          onDiscardDraft={(id) => {
+            setDrafts((current) => current.filter((draft) => draft.id !== id));
+            pruneDraftSyncItem(id);
+          }}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`) === null}
@@ -1865,14 +1933,11 @@ function renderRoute({
   }
 }
 
-function OverviewPage({ draftCount, recordCount, accountBalances, accountReports, syncIssues, onRetrySyncItem, navigate }: Readonly<{
-  draftCount: number;
-  recordCount: number;
+function OverviewPage({ accountBalances, accountReports, syncIssues, onRetrySyncItem }: Readonly<{
   accountBalances: ReturnType<typeof calculateAccountBalances>;
   accountReports: AccountReport[];
   syncIssues: CloudSyncQueueItem[];
   onRetrySyncItem: (id: string) => void;
-  navigate: (item: NavItem) => void;
 }>) {
   const { t } = useI18n();
   const accountDetail = accountBalances.length === 0
@@ -1883,12 +1948,6 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
     <div className="route-stack">
       <section className="summary-grid">
         <EmptyMetric label={t("overview.accountSummary")} value={accountBalances.length > 0 ? t("overview.accountCount", { count: accountBalances.length }) : t("status.noBalance")} detail={accountDetail} />
-        <EmptyMetric label={t("overview.ledgerRecords")} value={recordCount > 0 ? t("status.recordsSyncedSummary", { count: recordCount }) : t("ledger.emptyRecords")} detail={metricDetail(recordCount, t("overview.metricsReady"), t("overview.metricsEmpty"))} />
-        <EmptyMetric
-          label={t("overview.draftsPending")}
-          value={draftCount > 0 ? t("status.recordsPendingSummary", { count: draftCount }) : t("status.noPending")}
-          detail={metricDetail(draftCount, t("overview.draftMetricsReady"), t("overview.draftMetricsEmpty"))}
-        />
       </section>
       {syncIssues.length > 0 ? (
         <Panel title={t("overview.syncAlerts")} eyebrow={t("overview.needsAction")}>
@@ -1926,6 +1985,7 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
                 </div>
                 <dl>
                   <div><dt>{t("overview.balance")}</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
+                  {report.fundAdditionTotal !== 0 ? <div><dt>{t("overview.openingBalance")}</dt><dd>{formatAccountBalance(report.fundAdditionTotal, report.currency)}</dd></div> : null}
                   <div><dt>{t("overview.netSpending")}</dt><dd>{formatAccountBalance(report.netSpendingTotal, report.currency)}</dd></div>
                   <div><dt>{t("overview.cashFlow")}</dt><dd>{formatAccountBalance(report.cashFlowTotal, report.currency)}</dd></div>
                 </dl>
@@ -1934,21 +1994,6 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
           </div>
         )}
       </Panel>
-      <section className="content-grid">
-        <Panel title={t("overview.startNewRecord")} eyebrow={t("overview.firstStep")}>
-          <p className="panel-copy">
-            {t("overview.startCopy")}
-          </p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
-            {t("overview.startRecord")}
-          </button>
-        </Panel>
-        <Panel title={t("overview.confirmCounts")} eyebrow={t("overview.dataSafety")}>
-          <p className="panel-copy">
-            {t("overview.confirmCopy")}
-          </p>
-        </Panel>
-      </section>
     </div>
   );
 }
@@ -1974,90 +2019,352 @@ function ConfirmActionButton({ label, message, onConfirm }: Readonly<{
   );
 }
 
-type LedgerRecordCardProps = {
-  record: LocalLedgerRecord;
-  isEditing: boolean;
-  isEditingUnresolved: boolean;
-  onEdit: () => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (patch: Partial<EditableRecordFields>) => void;
-  onCompleteDetails: () => void;
-  onCancelDetails: () => void;
-  onConvertDetails: (fields: UnresolvedExpenseConversion) => boolean;
-  onUpdate: (patch: Partial<EditableRecordFields>) => void;
-  onDelete: () => void;
-  deleteAction: DeleteAction;
+// --- Ledger filter & sort (明細篩選) ---
+// The confirmed list is grouped by type family (支出 / 收入 / 轉帳 / 調整),
+// filtered by account (chips), category, merchant/source, and free-text
+// search, and sorted by date, amount, merchant, or category.
+
+type LedgerFilterSort =
+  | "date-desc"
+  | "date-asc"
+  | "amount-desc"
+  | "amount-asc"
+  | "merchant-asc"
+  | "merchant-desc"
+  | "category-asc"
+  | "category-desc";
+
+type LedgerFilters = {
+  query: string;
+  accountName: string | null;
+  category: string | null;
+  merchant: string | null;
+  sort: LedgerFilterSort;
 };
 
-function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onDelete, deleteAction }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onDelete" | "deleteAction"> & { isVoided: boolean }>) {
-  const { t } = useI18n();
-  if (isVoided) return <span className="record-state-label">{t("ledger.voided")}</span>;
+const defaultLedgerFilters: LedgerFilters = {
+  query: "",
+  accountName: null,
+  category: null,
+  merchant: null,
+  sort: "date-desc",
+};
 
-  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
-  const hardDelete = deleteAction === "hard-delete";
+const ledgerSortOptions: ReadonlyArray<{ sort: LedgerFilterSort; labelKey: string }> = [
+  { sort: "date-desc", labelKey: "ledger.sortDateNewest" },
+  { sort: "date-asc", labelKey: "ledger.sortDateOldest" },
+  { sort: "amount-desc", labelKey: "ledger.sortAmountDesc" },
+  { sort: "amount-asc", labelKey: "ledger.sortAmountAsc" },
+  { sort: "merchant-asc", labelKey: "ledger.sortMerchantAsc" },
+  { sort: "merchant-desc", labelKey: "ledger.sortMerchantDesc" },
+  { sort: "category-asc", labelKey: "ledger.sortCategoryAsc" },
+  { sort: "category-desc", labelKey: "ledger.sortCategoryDesc" },
+];
+
+// Statistical-period records may not carry a precise localDate; fall back to
+// their period bounds, then to the creation date, so sorting stays stable.
+function ledgerRecordDateKey(record: LocalLedgerRecord): string {
+  return record.localDate || record.periodStart || record.periodEnd || record.createdAt.slice(0, 10);
+}
+
+function compareLedgerRecords(a: LocalLedgerRecord, b: LocalLedgerRecord, sort: LedgerFilterSort): number {
+  const byName = (record: LocalLedgerRecord) => record.counterparty || record.reason || record.itemName || "";
+  const byCategory = (record: LocalLedgerRecord) => record.category || record.reason || "";
+  switch (sort) {
+    case "date-desc":
+      return ledgerRecordDateKey(b).localeCompare(ledgerRecordDateKey(a)) || b.createdAt.localeCompare(a.createdAt);
+    case "date-asc":
+      return ledgerRecordDateKey(a).localeCompare(ledgerRecordDateKey(b)) || a.createdAt.localeCompare(b.createdAt);
+    case "amount-desc":
+      return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+    case "amount-asc":
+      return (Number(a.amount) || 0) - (Number(b.amount) || 0);
+    case "merchant-asc":
+      return byName(a).localeCompare(byName(b), "zh-Hant");
+    case "merchant-desc":
+      return byName(b).localeCompare(byName(a), "zh-Hant");
+    case "category-asc":
+      return byCategory(a).localeCompare(byCategory(b), "zh-Hant");
+    case "category-desc":
+      return byCategory(b).localeCompare(byCategory(a), "zh-Hant");
+  }
+}
+
+// Refund and 缺漏支出 roll into the 支出 family, fund additions into 收入,
+// so the history reads as money in / money out / movement / corrections.
+const ledgerSectionDefs: ReadonlyArray<{
+  key: string;
+  kinds: LocalLedgerRecord["kind"][];
+  labelKey: string;
+}> = [
+  { key: "expense", kinds: ["expense", "refund", "unresolved-expense"], labelKey: "kind.expense" },
+  { key: "income", kinds: ["income", "fund-addition"], labelKey: "kind.income" },
+  { key: "transfer", kinds: ["transfer"], labelKey: "kind.transfer" },
+  { key: "adjustment", kinds: ["adjustment"], labelKey: "kind.adjustment" },
+];
+
+function ledgerSectionSubtotals(records: LocalLedgerRecord[]): string {
+  const totals = new Map<string, number>();
+  for (const record of records) {
+    if (record.recordState === "voided") continue;
+    const amount = Number(record.amount) || 0;
+    totals.set(record.currency, (totals.get(record.currency) ?? 0) + amount);
+  }
+  return [...totals.entries()]
+    .map(([currency, total]) => formatAccountBalance(total, currency))
+    .join(" · ");
+}
+
+type LedgerFilterDropdownItem = {
+  id: string;
+  name: string;
+  count?: number;
+};
+
+// Popover select for category / merchant / sort: a button that opens a
+// searchable option list and closes on an outside tap (same pattern as the
+// per-record overflow menu).
+function LedgerFilterDropdown({
+  label,
+  ariaLabel,
+  value,
+  items,
+  onChange,
+  searchable = true,
+  showCount = true,
+}: Readonly<{
+  label: string;
+  ariaLabel: string;
+  value: string | null;
+  items: LedgerFilterDropdownItem[];
+  onChange: (id: string | null) => void;
+  searchable?: boolean;
+  showCount?: boolean;
+}>) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visible = normalizedQuery
+    ? items.filter((item) => item.name.toLowerCase().includes(normalizedQuery))
+    : items;
+
   return (
-    <div className="record-actions">
-      {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>{t("ledger.completeDetails")}</button> : null}
-      {isRecurring ? <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>{record.recurrenceStatus === "active" ? t("ledger.pauseCycle") : t("ledger.resumeCycle")}</button> : null}
-      {isRecurring ? <ConfirmActionButton label={t("ledger.cancelCycle")} message={t("ledger.cancelCycleConfirm")} onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
-      <button className="text-action" type="button" onClick={onEdit}>{t("ledger.edit")}</button>
-      {hardDelete ? (
-        <ConfirmActionButton label={t("ledger.delete")} message={t("ledger.deleteConfirm")} onConfirm={onDelete} />
-      ) : (
-        <ConfirmActionButton label={t("ledger.void")} message={t("ledger.voidConfirm")} onConfirm={onDelete} />
-      )}
+    <div className="ledger-select" ref={rootRef}>
+      <button
+        type="button"
+        className={`filter-button ${value ? "active" : ""}`}
+        aria-label={value ? `${label}: ${value}` : label}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="filter-button-label">{label}</span>
+        {value ? <strong className="filter-button-value">{value}</strong> : null}
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="filter-popover" role="listbox" aria-label={ariaLabel}>
+          {searchable ? (
+            <input
+              className="filter-popover-search"
+              type="search"
+              value={query}
+              placeholder={t("ledger.filterSearchPlaceholder")}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          ) : null}
+          <button
+            type="button"
+            role="option"
+            aria-selected={value === null}
+            className={value === null ? "selected" : ""}
+            onClick={() => { onChange(null); setOpen(false); setQuery(""); }}
+          >
+            <span>{t("ledger.filterAll")}</span>
+          </button>
+          {visible.map((item) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === item.id}
+              className={value === item.id ? "selected" : ""}
+              key={item.id}
+              onClick={() => { onChange(item.id); setOpen(false); setQuery(""); }}
+            >
+              <span className="filter-option-name">{item.name}</span>
+              {showCount && item.count !== undefined ? (
+                <span className="filter-option-count">{t("ledger.sectionCount", { count: item.count })}</span>
+              ) : null}
+            </button>
+          ))}
+          {visible.length === 0 ? <p className="filter-popover-empty">{t("ledger.filterNoMatch")}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function LedgerRecordCard({
-  record,
-  isEditing,
-  isEditingUnresolved,
-  onEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onCompleteDetails,
-  onCancelDetails,
-  onConvertDetails,
-  onUpdate,
-  onDelete,
-  deleteAction,
-}: Readonly<LedgerRecordCardProps>) {
-  if (isEditingUnresolved && record.recordState !== "voided") {
-    return <UnresolvedExpenseEditor record={record} onCancel={onCancelDetails} onConvert={onConvertDetails} />;
-  }
-
-  if (isEditing && record.recordState !== "voided") {
-    return <RecordEditor record={record} onCancel={onCancelEdit} onSave={onSaveEdit} />;
-  }
-
-  const isVoided = record.recordState === "voided";
-  const statusLabel = ledgerRecordStatusLabel(record, isVoided);
+function LedgerFilterBar({
+  accountOptions,
+  categoryOptions,
+  merchantOptions,
+  filters,
+  onChange,
+}: Readonly<{
+  accountOptions: string[];
+  categoryOptions: LedgerFilterDropdownItem[];
+  merchantOptions: LedgerFilterDropdownItem[];
+  filters: LedgerFilters;
+  onChange: (filters: LedgerFilters) => void;
+}>) {
+  const { t } = useI18n();
+  const hasActiveFilters = Boolean(
+    filters.query.trim() || filters.accountName || filters.category || filters.merchant,
+  );
+  const selectedSort = ledgerSortOptions.find((option) => option.sort === filters.sort) ?? ledgerSortOptions[0];
   return (
-    <article className={`draft-card ledger-record-card ${isVoided ? "voided-record" : ""}`}>
-      <div className="record-summary">
-        <strong>{recordDisplayName(record)}</strong>
-        <span className="record-detail">{recordDetailLine(record)}</span>
+    <div className="ledger-filter-bar" aria-label={t("ledger.filtersAria")} role="group">
+      <div className="ledger-filter-row">
+        <div className="ledger-search">
+          <Search size={14} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label={t("ledger.searchAria")}
+            placeholder={t("ledger.searchPlaceholder")}
+            value={filters.query}
+            onChange={(event) => onChange({ ...filters, query: event.target.value })}
+          />
+        </div>
+        {hasActiveFilters ? (
+          <button type="button" className="filter-clear" onClick={() => onChange(defaultLedgerFilters)}>
+            <X size={14} aria-hidden="true" />
+            {t("ledger.clearFilters")}
+          </button>
+        ) : null}
       </div>
-      <div className="draft-amount record-amount">
-        <strong>{record.currency} {record.amount}</strong>
-        <span>{kindLabel(record.kind)} · {statusLabel}</span>
+      <div className="ledger-account-chips" role="group" aria-label={t("ledger.filterAccount")}>
+        <button
+          type="button"
+          className={`account-chip ${filters.accountName === null ? "active" : ""}`}
+          aria-pressed={filters.accountName === null}
+          onClick={() => onChange({ ...filters, accountName: null })}
+        >
+          {t("ledger.filterAll")}
+        </button>
+        {accountOptions.map((accountName) => {
+          const active = filters.accountName === accountName;
+          return (
+            <button
+              type="button"
+              className={`account-chip ${active ? "active" : ""}`}
+              aria-pressed={active}
+              key={accountName}
+              onClick={() => onChange({ ...filters, accountName: active ? null : accountName })}
+            >
+              {accountName}
+            </button>
+          );
+        })}
       </div>
-      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onDelete={onDelete} deleteAction={deleteAction} />
-    </article>
+      <div className="ledger-filter-row">
+        <LedgerFilterDropdown
+          label={t("ledger.filterCategory")}
+          ariaLabel={t("ledger.filterCategory")}
+          value={filters.category}
+          items={categoryOptions}
+          onChange={(category) => onChange({ ...filters, category })}
+        />
+        <LedgerFilterDropdown
+          label={t("ledger.filterMerchant")}
+          ariaLabel={t("ledger.filterMerchant")}
+          value={filters.merchant}
+          items={merchantOptions}
+          onChange={(merchant) => onChange({ ...filters, merchant })}
+        />
+        <LedgerFilterDropdown
+          label={t("ledger.sort")}
+          ariaLabel={t("ledger.sort")}
+          value={t(selectedSort.labelKey)}
+          items={ledgerSortOptions.map((option) => ({ id: option.sort, name: t(option.labelKey) }))}
+          searchable={false}
+          showCount={false}
+          onChange={(sort) => { if (sort) onChange({ ...filters, sort: sort as LedgerFilterSort }); }}
+        />
+      </div>
+    </div>
   );
 }
 
-function ledgerRecordStatusLabel(record: LocalLedgerRecord, isVoided: boolean): string {
-  if (isVoided) return t("ledger.voided");
-  return record.status === "synced" ? t("ledger.synced") : t("ledger.localOnly");
+type LedgerRecordCardProps = {
+  record: LocalLedgerRecord;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleteAction: DeleteAction;
+};
+
+// Row-level actions stay icon-only: edit opens the floating record dialog
+// (which hosts the context actions that used to live in the ⋯ overflow menu),
+// and delete opens a proper confirm dialog instead of an inline box.
+function LedgerRecordActions({ isVoided, onEdit, onDelete, deleteAction }: Readonly<{
+  isVoided: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleteAction: DeleteAction;
+}>) {
+  const { t } = useI18n();
+  if (isVoided) return <span className="record-state-label">{t("ledger.voided")}</span>;
+
+  const hardDelete = deleteAction === "hard-delete";
+  const deleteLabel = hardDelete ? t("ledger.delete") : t("ledger.void");
+  return (
+    <div className="record-actions">
+      <button className="icon-action" type="button" aria-label={t("ledger.edit")} title={t("ledger.edit")} onClick={onEdit}><Pencil size={16} aria-hidden="true" /></button>
+      <button className="icon-action" type="button" aria-label={deleteLabel} title={deleteLabel} onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></button>
+    </div>
+  );
+}
+
+function LedgerRecordCard({ record, onEdit, onDelete, deleteAction }: Readonly<LedgerRecordCardProps>) {
+  const isVoided = record.recordState === "voided";
+  const { t } = useI18n();
+  return (
+    <article className={`draft-card ledger-record-card ${isVoided ? "voided-record" : ""}`}>
+      <span className="record-date" title={record.localDate || record.periodStart || record.periodEnd || ""}>{recordShortDate(record)}</span>
+      <span className="record-name">
+        <strong className="record-item">{recordTitle(record)}</strong>
+        {record.itemName && !record.itemNameMissing ? <span className="record-merchant">{record.counterparty || record.reason}</span> : null}
+      </span>
+      <span className="record-meta">
+        <span className="record-detail-line">{recordMetaLine(record)}</span>
+        {record.status === "local-only" && !isVoided ? <em className="record-status">{t("ledger.localOnly")}</em> : null}
+      </span>
+      <div className="draft-amount record-amount">
+        <strong>{record.currency} {record.amount}</strong>
+      </div>
+      <LedgerRecordActions isVoided={isVoided} onEdit={onEdit} onDelete={onDelete} deleteAction={deleteAction} />
+    </article>
+  );
 }
 
 function LedgerPage({
   records,
   drafts,
-  accounts,
   navigate,
   onDiscardDraft,
   onEditDraft,
@@ -2066,13 +2373,9 @@ function LedgerPage({
   onConvertUnresolved,
   onDeleteRecord,
   deleteAction,
-  onAddAccount,
-  onSaveInitialFunding,
-  onReopenOnboarding,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
-  accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
   onEditDraft: (draft: TransactionDraft) => void;
@@ -2081,47 +2384,85 @@ function LedgerPage({
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
   onDeleteRecord: (id: string) => void;
   deleteAction: DeleteAction;
-  onAddAccount: (account: LocalAccount) => void;
-  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onReopenOnboarding: () => void;
 }>) {
   const { t } = useI18n();
   const draftCount = drafts.length;
-  const [section, setSection] = useState<"records" | "accounts">("records");
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
+  const [deleteConfirmRecordId, setDeleteConfirmRecordId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
+  const editingRecord = editingRecordId ? records.find((item) => item.id === editingRecordId) ?? null : null;
+  const editingUnresolved = editingUnresolvedId ? records.find((item) => item.id === editingUnresolvedId) ?? null : null;
+  const deleteConfirmRecord = deleteConfirmRecordId ? records.find((item) => item.id === deleteConfirmRecordId) ?? null : null;
+  const hardDelete = deleteAction === "hard-delete";
   return (
     <div className="route-stack">
-      <div className="settings-tabs ledger-tabs" role="tablist" aria-label={t("ledger.sectionsAria")}>
-        <button className={`settings-tab ${section === "records" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "records"} onClick={() => setSection("records")}>{t("ledger.recordsTab")}</button>
-        <button className={`settings-tab ${section === "accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "accounts"} onClick={() => setSection("accounts")}>{t("ledger.accountsTab")}</button>
-      </div>
-      {section === "accounts" ? (
-        <LedgerAccountsPanel accounts={accounts} onAddAccount={onAddAccount} onSaveInitialFunding={onSaveInitialFunding} onReopenOnboarding={onReopenOnboarding} />
-      ) : (
-        <LedgerRecordsView
-          records={records}
-          drafts={drafts}
-          draftCount={draftCount}
-          draftMessage={draftMessage}
-          editingRecordId={editingRecordId}
-          editingUnresolvedId={editingUnresolvedId}
-          navigate={navigate}
-          onEditDraft={onEditDraft}
-          onConfirmDraft={onConfirmDraft}
-          onDiscardDraft={onDiscardDraft}
-          onUpdateRecord={onUpdateRecord}
-          onConvertUnresolved={onConvertUnresolved}
-          onDeleteRecord={onDeleteRecord}
-          deleteAction={deleteAction}
-          onBeginEditRecord={setEditingRecordId}
-          onEndEditRecord={() => setEditingRecordId(null)}
-          onBeginUnresolved={setEditingUnresolvedId}
-          onEndUnresolved={() => setEditingUnresolvedId(null)}
-          onReportDraftMessage={setDraftMessage}
+      <LedgerRecordsView
+        records={records}
+        drafts={drafts}
+        draftCount={draftCount}
+        draftMessage={draftMessage}
+        navigate={navigate}
+        onEditDraft={onEditDraft}
+        onConfirmDraft={onConfirmDraft}
+        onDiscardDraft={onDiscardDraft}
+        onUpdateRecord={onUpdateRecord}
+        onConvertUnresolved={onConvertUnresolved}
+        onDeleteRecord={onDeleteRecord}
+        deleteAction={deleteAction}
+        onBeginEditRecord={setEditingRecordId}
+        onBeginDeleteRecord={setDeleteConfirmRecordId}
+        onReportDraftMessage={setDraftMessage}
+      />
+      {editingRecord ? (
+        <EditorDialog
+          title={t("ledger.editRecordTitle", { name: recordDisplayName(editingRecord) })}
+          onClose={() => setEditingRecordId(null)}
+        >
+          <RecordEditor
+            record={editingRecord}
+            onCancel={() => setEditingRecordId(null)}
+            onSave={(patch) => { onUpdateRecord(editingRecord.id, patch); setEditingRecordId(null); }}
+            onCompleteDetails={() => {
+              setEditingRecordId(null);
+              setEditingUnresolvedId(editingRecord.id);
+            }}
+            onUpdate={(patch) => onUpdateRecord(editingRecord.id, patch)}
+          />
+        </EditorDialog>
+      ) : null}
+      {editingUnresolved ? (
+        <EditorDialog
+          title={t("ledger.completeEditorTitle", { name: recordDisplayName(editingUnresolved) })}
+          onClose={() => setEditingUnresolvedId(null)}
+        >
+          <UnresolvedExpenseEditor
+            record={editingUnresolved}
+            onCancel={() => setEditingUnresolvedId(null)}
+            onConvert={(fields) => {
+              const converted = onConvertUnresolved(editingUnresolved.id, fields);
+              if (converted) setEditingUnresolvedId(null);
+              return converted;
+            }}
+          />
+          <div className="record-dialog-actions">
+            <button className="quiet-action" type="button" onClick={() => {
+              setEditingUnresolvedId(null);
+              setEditingRecordId(editingUnresolved.id);
+            }}>
+              {t("ledger.backToEdit")}
+            </button>
+          </div>
+        </EditorDialog>
+      ) : null}
+      {deleteConfirmRecord ? (
+        <ConfirmActionDialog
+          title={hardDelete ? t("ledger.delete") : t("ledger.void")}
+          message={hardDelete ? t("ledger.deleteConfirm") : t("ledger.voidConfirm")}
+          onCancel={() => setDeleteConfirmRecordId(null)}
+          onConfirm={() => { onDeleteRecord(deleteConfirmRecord.id); setDeleteConfirmRecordId(null); }}
         />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -2131,8 +2472,6 @@ function LedgerRecordsView({
   drafts,
   draftCount,
   draftMessage,
-  editingRecordId,
-  editingUnresolvedId,
   navigate,
   onEditDraft,
   onConfirmDraft,
@@ -2142,17 +2481,13 @@ function LedgerRecordsView({
   onDeleteRecord,
   deleteAction,
   onBeginEditRecord,
-  onEndEditRecord,
-  onBeginUnresolved,
-  onEndUnresolved,
+  onBeginDeleteRecord,
   onReportDraftMessage,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
   draftCount: number;
   draftMessage: string;
-  editingRecordId: string | null;
-  editingUnresolvedId: string | null;
   navigate: (item: NavItem) => void;
   onEditDraft: (draft: TransactionDraft) => void;
   onConfirmDraft: (draft: TransactionDraft) => boolean;
@@ -2162,17 +2497,60 @@ function LedgerRecordsView({
   onDeleteRecord: (id: string) => void;
   deleteAction: DeleteAction;
   onBeginEditRecord: (id: string) => void;
-  onEndEditRecord: () => void;
-  onBeginUnresolved: (id: string) => void;
-  onEndUnresolved: () => void;
+  onBeginDeleteRecord: (id: string) => void;
   onReportDraftMessage: (message: string) => void;
 }>) {
   const { t } = useI18n();
+  const [filters, setFilters] = useState<LedgerFilters>(defaultLedgerFilters);
+  const ledgerEntries = records.filter((record) => !isOpeningBalance(record));
+
+  const accountOptions = useMemo(() => {
+    const names = new Set(ledgerEntries.map((record) => record.accountName).filter(Boolean));
+    return [...names].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  }, [ledgerEntries]);
+
+  const buildOptions = useCallback((pick: (record: LocalLedgerRecord) => string | null) => {
+    const counts = new Map<string, number>();
+    for (const record of ledgerEntries) {
+      const name = pick(record);
+      if (!name) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "zh-Hant"))
+      .map(([name, count]) => ({ id: name, name, count }));
+  }, [ledgerEntries]);
+
+  const categoryOptions = useMemo(
+    () => buildOptions((record) => record.category.trim() || null),
+    [buildOptions],
+  );
+  const merchantOptions = useMemo(
+    () => buildOptions((record) => (record.counterpartyMissing ? null : record.counterparty.trim() || null)),
+    [buildOptions],
+  );
+
+  const visibleRecords = useMemo(() => {
+    let list = ledgerEntries;
+    if (filters.accountName) list = list.filter((record) => record.accountName === filters.accountName);
+    if (filters.category) list = list.filter((record) => record.category === filters.category);
+    if (filters.merchant) list = list.filter((record) => record.counterparty === filters.merchant);
+    const query = filters.query.trim().toLowerCase();
+    if (query) {
+      list = list.filter((record) => [record.counterparty, record.category, record.itemName, record.accountName, record.reason, record.note]
+        .some((value) => (value ?? "").toLowerCase().includes(query)));
+    }
+    return [...list].sort((a, b) => compareLedgerRecords(a, b, filters.sort));
+  }, [filters, ledgerEntries]);
+
+  const sections = useMemo(() => ledgerSectionDefs
+    .map((def) => ({ def, records: visibleRecords.filter((record) => def.kinds.includes(record.kind)) }))
+    .filter((section) => section.records.length > 0), [visibleRecords]);
+
   return (
     <>
       <section className="content-grid">
         <Panel title={t("ledger.confirmedPanel")} eyebrow={t("ledger.confirmedEyebrow")}>
-          <p className="panel-copy">{t("ledger.confirmedCopy")}</p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
             {t("ledger.startRecord")}
           </button>
@@ -2183,36 +2561,50 @@ function LedgerRecordsView({
           </p>
         </Panel>
       </section>
-      {records.length > 0 ? (
-        <section className="draft-list" aria-label={t("draft.confirmedListAria")}>
+      {ledgerEntries.length > 0 ? (
+        <section className="ledger-history" aria-label={t("draft.confirmedListAria")}>
           <div className="draft-list-heading">
             <div>
               <p className="eyebrow">{t("draft.confirmedEyebrow")}</p>
               <h2>{t("draft.historyTitle")}</h2>
             </div>
-            <span>{t("draft.recordCount", { count: records.length })}</span>
+            <span>{t("draft.recordCount", { count: visibleRecords.length })}</span>
           </div>
-          {records.map((record) => (
-            <LedgerRecordCard
-              key={record.id}
-              record={record}
-              isEditing={editingRecordId === record.id}
-              isEditingUnresolved={editingUnresolvedId === record.id}
-              onEdit={() => onBeginEditRecord(record.id)}
-              onCancelEdit={onEndEditRecord}
-              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); onEndEditRecord(); }}
-              onCompleteDetails={() => onBeginUnresolved(record.id)}
-              onCancelDetails={onEndUnresolved}
-              onConvertDetails={(fields) => {
-                const converted = onConvertUnresolved(record.id, fields);
-                if (converted) onEndUnresolved();
-                return converted;
-              }}
-              onUpdate={(patch) => onUpdateRecord(record.id, patch)}
-              onDelete={() => onDeleteRecord(record.id)}
-              deleteAction={deleteAction}
-            />
-          ))}
+          <LedgerFilterBar
+            accountOptions={accountOptions}
+            categoryOptions={categoryOptions}
+            merchantOptions={merchantOptions}
+            filters={filters}
+            onChange={setFilters}
+          />
+          {visibleRecords.length === 0 ? (
+            <p className="table-empty">{t("ledger.filterEmpty")}</p>
+          ) : null}
+          {sections.map(({ def, records: sectionRecords }) => {
+            const subtotal = ledgerSectionSubtotals(sectionRecords);
+            return (
+              <section className="ledger-kind-section" key={def.key}>
+                <div className="ledger-section-heading">
+                  <h3>{t(def.labelKey)}</h3>
+                  <span>
+                    {t("ledger.sectionCount", { count: sectionRecords.length })}
+                    {subtotal ? ` · ${t("ledger.sectionSubtotal", { total: subtotal })}` : ""}
+                  </span>
+                </div>
+                <div className="ledger-section-rows">
+                  {sectionRecords.map((record) => (
+                    <LedgerRecordCard
+                      key={record.id}
+                      record={record}
+                      onEdit={() => onBeginEditRecord(record.id)}
+                      onDelete={() => onBeginDeleteRecord(record.id)}
+                      deleteAction={deleteAction}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </section>
       ) : null}
       {draftCount > 0 ? (
@@ -2237,7 +2629,7 @@ function LedgerRecordsView({
         </section>
       ) : null}
       {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
-      {records.length === 0 ? <p className="table-empty">{t("draft.emptyConfirmed")}</p> : null}
+      {ledgerEntries.length === 0 ? <p className="table-empty">{t("draft.emptyConfirmed")}</p> : null}
     </>
   );
 }
@@ -2321,44 +2713,104 @@ function UnresolvedExpenseEditor({
 
   return (
     <form className="record-editor" aria-label={t("ledger.completeEditorTitle", { name: recordDisplayName(record) })} onSubmit={handleSubmit}>
-      <label>
-        <span>{t("field.date")}</span>
-        <input required type="date" value={localDate} onChange={(event) => setLocalDate(event.target.value)} />
-      </label>
-      <label>
-        <span>{t("field.category")}</span>
-        <input required value={category} onChange={(event) => setCategory(event.target.value)} />
-      </label>
-      <div className="form-field">
-        <label htmlFor={`unresolved-merchant-${record.id}`}>{t("field.merchant")}</label>
-        <input id={`unresolved-merchant-${record.id}`} required pattern=".*\S.*" disabled={counterpartyMissing} value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
-        <label className="checkbox-field inline-checkbox">
-          <input type="checkbox" checked={counterpartyMissing} onChange={(event) => {
-            const missing = event.target.checked;
-            setCounterpartyMissing(missing);
-            setCounterparty(missing ? missingCounterpartyLabel : "");
-          }} />
-          <span>{t("field.merchantMissing")}</span>
+      <div className="record-editor-fields">
+        <label>
+          <span>{t("field.date")}</span>
+          <input required type="date" value={localDate} onChange={(event) => setLocalDate(event.target.value)} />
         </label>
-      </div>
-      <div className="form-field">
-        <label htmlFor={`unresolved-item-${record.id}`}>{t("field.itemName")}</label>
-        <input id={`unresolved-item-${record.id}`} required pattern=".*\S.*" disabled={itemNameMissing} value={itemName} onChange={(event) => setItemName(event.target.value)} />
-        <label className="checkbox-field inline-checkbox">
-          <input type="checkbox" checked={itemNameMissing} onChange={(event) => {
-            const missing = event.target.checked;
-            setItemNameMissing(missing);
-            setItemName(missing ? missingItemNameLabel : "");
-          }} />
-          <span>{t("field.itemNameMissing")}</span>
+        <label>
+          <span>{t("field.category")}</span>
+          <input required value={category} onChange={(event) => setCategory(event.target.value)} />
         </label>
+        <div className="form-field">
+          <label htmlFor={`unresolved-merchant-${record.id}`}>{t("field.merchant")}</label>
+          <input id={`unresolved-merchant-${record.id}`} required pattern=".*\S.*" disabled={counterpartyMissing} value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
+          <label className="checkbox-field inline-checkbox">
+            <input type="checkbox" checked={counterpartyMissing} onChange={(event) => {
+              const missing = event.target.checked;
+              setCounterpartyMissing(missing);
+              setCounterparty(missing ? missingCounterpartyLabel : "");
+            }} />
+            <span>{t("field.merchantMissing")}</span>
+          </label>
+        </div>
+        <div className="form-field">
+          <label htmlFor={`unresolved-item-${record.id}`}>{t("field.itemName")}</label>
+          <input id={`unresolved-item-${record.id}`} required pattern=".*\S.*" disabled={itemNameMissing} value={itemName} onChange={(event) => setItemName(event.target.value)} />
+          <label className="checkbox-field inline-checkbox">
+            <input type="checkbox" checked={itemNameMissing} onChange={(event) => {
+              const missing = event.target.checked;
+              setItemNameMissing(missing);
+              setItemName(missing ? missingItemNameLabel : "");
+            }} />
+            <span>{t("field.itemNameMissing")}</span>
+          </label>
+        </div>
+        {error ? <p className="form-error full-span" role="alert">{error}</p> : null}
       </div>
-      {error ? <p className="form-error full-span" role="alert">{error}</p> : null}
-      <div className="record-editor-actions full-span">
-        <button className="primary-action" type="submit">{t("ledger.convertToExpense")}</button>
-        <button className="quiet-action" type="button" onClick={onCancel}>{t("ledger.cancel")}</button>
+      <div className="record-editor-footer full-span">
+        <div className="record-editor-actions">
+          <button className="primary-action" type="submit">{t("ledger.convertToExpense")}</button>
+          <button className="quiet-action" type="button" onClick={onCancel}>{t("ledger.cancel")}</button>
+        </div>
       </div>
     </form>
+  );
+}
+
+// Delete / void confirmation as a proper dialog instead of a cramped inline box.
+function ConfirmActionDialog({ title, message, onConfirm, onCancel }: Readonly<{
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}>) {
+  const { t } = useI18n();
+  return (
+    <EditorDialog title={title} onClose={onCancel}>
+      <p className="confirm-dialog-message">{message}</p>
+      <div className="confirm-dialog-actions">
+        <button className="danger-action" type="button" onClick={onConfirm}>{t("common.confirm")}</button>
+        <button className="quiet-action" type="button" onClick={onCancel}>{t("common.cancel")}</button>
+      </div>
+    </EditorDialog>
+  );
+}
+
+// Floating editor overlay: the record list stays put while the editor opens
+// on top (no push-down reflow), with Esc / backdrop click / ✕ to close.
+function EditorDialog({ title, onClose, children }: Readonly<{ title: string; onClose: () => void; children: ReactNode }>) {
+  const { t } = useI18n();
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    // Lock both body and html so no viewport scrollbar can ever appear while
+    // the dialog is open (body overflow alone does not hide the html one).
+    const previousOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div className="editor-backdrop" onClick={onClose}>
+      <div className="editor-panel" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
+        <div className="editor-panel-header">
+          <strong>{title}</strong>
+          <button type="button" className="icon-action" aria-label={t("common.close")} title={t("common.close")} onClick={onClose}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="editor-panel-body">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -2366,10 +2818,14 @@ function RecordEditor({
   record,
   onSave,
   onCancel,
+  onCompleteDetails,
+  onUpdate,
 }: Readonly<{
   record: LocalLedgerRecord;
   onSave: (patch: Partial<EditableRecordFields>) => void;
   onCancel: () => void;
+  onCompleteDetails?: () => void;
+  onUpdate?: (patch: Partial<EditableRecordFields>) => void;
 }>) {
   const [amount, setAmount] = useState(record.amount);
   const [category, setCategory] = useState(record.category);
@@ -2377,37 +2833,190 @@ function RecordEditor({
   const [itemName, setItemName] = useState(record.itemName);
   const [reason, setReason] = useState(record.reason);
   const [note, setNote] = useState(record.note);
+  const [recurrenceChoice, setRecurrenceChoice] = useState<RecurrenceChoice>(record.recurrenceChoice);
+  const [recurrenceAmountMode, setRecurrenceAmountMode] = useState<RecurrenceAmountMode>(record.recurrenceAmountMode);
   const { t } = useI18n();
+  // Same rule as the capture form: only expenses, income, and transfers carry
+  // a next-cycle intent.
+  const supportsRecurrence = record.kind === "expense" || record.kind === "income" || record.kind === "transfer";
+  const autoRecordAllowed = recurrenceAmountMode === "fixed" && Boolean(amount.trim());
+  // Records without an active cycle keep the next-cycle controls collapsed to
+  // a one-line entry point, so a plain amount edit stays short. Recurring
+  // records show a compact summary with the pause/cancel controls and expand
+  // the full behavior settings on demand — keeping the dialog short enough to
+  // fit without internal scrolling.
+  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  const [recurrenceExpanded, setRecurrenceExpanded] = useState(false);
+  const behaviorLabel = recurrenceChoice === "auto-record-next-cycle"
+    ? t("capture.autoRecordNextCycle")
+    : recurrenceChoice === "prompt-next-cycle"
+      ? t("capture.promptNextCycle")
+      : t("capture.currentCycleOnly");
+  const amountModeLabel = recurrenceAmountMode === "variable" ? t("ledger.variableAmount") : t("ledger.fixedAmount");
 
   return (
     <form className="record-editor" aria-label={t("ledger.editRecordTitle", { name: recordDisplayName(record) })} onSubmit={(event) => {
       event.preventDefault();
-      onSave({ amount, category, counterparty, itemName, reason, note });
+      const patch: Partial<EditableRecordFields> = { amount, category, counterparty, itemName, reason, note };
+      if (supportsRecurrence && (
+        recurrenceChoice !== record.recurrenceChoice
+        || recurrenceAmountMode !== record.recurrenceAmountMode
+      )) {
+        patch.recurrenceChoice = recurrenceChoice;
+        patch.recurrenceAmountMode = recurrenceAmountMode;
+        // Choosing a next-cycle intent marks the record as recurring; going
+        // back to current-cycle-only turns the recurrence off again.
+        patch.recurrenceStatus = recurrenceChoice === "current-cycle-only" ? "inactive" : "active";
+      }
+      onSave(patch);
     }}>
-      <AmountField id="record-editor-amount" label={t("field.amount")} required value={amount} allowNegative={record.kind === "adjustment"} onChange={setAmount} />
+      <div className="record-editor-fields">
+      <AmountField id="record-editor-amount" label={t("field.amount")} currency={record.currency} required value={amount} allowNegative={record.kind === "adjustment"} onChange={setAmount} />
       <label>
         <span>{t("field.category")}</span>
         <input value={category} onChange={(event) => setCategory(event.target.value)} />
       </label>
       <label>
-        <span>{t("ledger.merchantOrSource")}</span>
+        <span>{counterpartyLabelForKind(record.kind)}</span>
         <input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
       </label>
-      <label>
+      {/* When the reason field is hidden (non-adjustment records without
+          imported/voice reason data) the item-name field must span the full
+          grid width — otherwise it sits alone in the left column with an
+          empty half next to it. */}
+      <label className={record.kind === "adjustment" || Boolean(reason.trim()) ? undefined : "full-span"}>
         <span>{t("field.itemName")}</span>
         <input value={itemName} onChange={(event) => setItemName(event.target.value)} />
       </label>
-      <label>
-        <span>{t("field.reason")}</span>
-        <input value={reason} onChange={(event) => setReason(event.target.value)} />
-      </label>
+      {/* 原因 only belongs to adjustments (調整原因, like the capture form);
+          for other kinds it is a redundant free-text field, so it stays hidden
+          unless the record already carries a reason from import/voice. */}
+      {record.kind === "adjustment" || Boolean(reason.trim()) ? (
+        <label>
+          <span>{record.kind === "adjustment" ? t("field.adjustmentReason") : t("field.reason")}</span>
+          <input value={reason} onChange={(event) => setReason(event.target.value)} />
+        </label>
+      ) : null}
       <label className="full-span">
         <span>{t("field.note")}</span>
         <textarea value={note} onChange={(event) => setNote(event.target.value)} />
       </label>
-      <div className="record-editor-actions full-span">
-        <button className="primary-action" type="submit">{t("ledger.saveChanges")}</button>
-        <button className="quiet-action" type="button" onClick={onCancel}>{t("ledger.cancel")}</button>
+      {supportsRecurrence && (isRecurring || recurrenceExpanded) ? (
+        <fieldset className="recurrence-control full-span" aria-label={t("capture.nextCycleLegend")}>
+          <legend>
+            {t("capture.nextCycleLegend")}
+            {recurrenceExpanded && recurrenceChoice !== "current-cycle-only" ? (
+              <span className="recurrence-legend-date">
+                {" · "}{t("ledger.monthlyCadence")}{nextCycleShortDate(record) ? ` ${nextCycleShortDate(record)}` : ""}
+              </span>
+            ) : null}
+          </legend>
+          {isRecurring && !recurrenceExpanded ? (
+            <div className="recurrence-summary">
+              <div className="recurrence-summary-schedule">
+                <strong>{t("ledger.monthlyCadence")}{nextCycleShortDate(record) ? ` ${nextCycleShortDate(record)}` : ""}</strong>
+                {record.recurrenceStatus === "paused" ? <span className="recurrence-paused-badge">{t("ledger.pausedBadge")}</span> : null}
+              </div>
+              <span className="recurrence-summary-text">
+                {behaviorLabel}
+                {recurrenceAmountMode === "variable" || !amount.trim() ? ` · ${amountModeLabel}` : ` · ${record.currency} ${amount}`}
+              </span>
+              <div className="recurrence-summary-actions">
+                {onUpdate ? (
+                  <button className="secondary-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>
+                    {record.recurrenceStatus === "active" ? t("ledger.pauseCycle") : t("ledger.resumeCycle")}
+                  </button>
+                ) : null}
+                {onUpdate ? (
+                  <ConfirmActionButton label={t("ledger.cancelCycle")} message={t("ledger.cancelCycleConfirm")} onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} />
+                ) : null}
+                <button className="quiet-action" type="button" onClick={() => setRecurrenceExpanded(true)}>
+                  {t("ledger.editCycleSettings")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <label htmlFor="record-editor-recurrence-choice" className="recurrence-behavior-label">
+                <span>{t("capture.recordBehavior")}</span>
+              </label>
+              <div className={`recurrence-behavior${recurrenceChoice === "current-cycle-only" ? " full-span" : ""}`}>
+                <select
+                  id="record-editor-recurrence-choice"
+                  value={recurrenceChoice}
+                  onChange={(event) => setRecurrenceChoice(event.target.value as RecurrenceChoice)}
+                >
+                  <option value="current-cycle-only">{t("capture.currentCycleOnly")}</option>
+                  <option value="prompt-next-cycle">{t("capture.promptNextCycle")}</option>
+                  <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>{t("capture.autoRecordNextCycle")}</option>
+                </select>
+              </div>
+              {recurrenceChoice === "current-cycle-only" ? (
+                <p className="field-help">{t("ledger.currentCycleOnlyHint")}</p>
+              ) : (
+                <>
+                  <label className="checkbox-field inline-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={recurrenceAmountMode === "variable"}
+                      onChange={(event) => {
+                        const variable = event.target.checked;
+                        setRecurrenceAmountMode(variable ? "variable" : "fixed");
+                        if (variable && recurrenceChoice === "auto-record-next-cycle") setRecurrenceChoice("prompt-next-cycle");
+                      }}
+                    />
+                    <span>{t("capture.amountMayVary")}</span>
+                  </label>
+                </>
+              )}
+              {recurrenceChoice === "auto-record-next-cycle" && !autoRecordAllowed ? (
+                <p className="field-help">{t("capture.autoRecordHint")}</p>
+              ) : null}
+              <button
+                className="collapse-recurrence"
+                type="button"
+                onClick={() => {
+                  // Collapsing a non-recurring preview discards any unsaved
+                  // behavior choice; a recurring record keeps its settings.
+                  if (!isRecurring) {
+                    setRecurrenceChoice(record.recurrenceChoice);
+                    setRecurrenceAmountMode(record.recurrenceAmountMode);
+                  }
+                  setRecurrenceExpanded(false);
+                }}
+              >
+                <span aria-hidden="true">▴</span>
+                {t("ledger.collapseRecurrence")}
+              </button>
+            </>
+          )}
+        </fieldset>
+      ) : null}
+      {supportsRecurrence && !isRecurring && !recurrenceExpanded ? (
+        <button
+          className="set-recurrence-toggle"
+          type="button"
+          onClick={() => {
+            setRecurrenceExpanded(true);
+            // Clicking 設為週期 expresses recurring intent: default to the safe
+            // "ask me next cycle" choice instead of leaving 僅本期 selected.
+            if (record.recurrenceChoice === "current-cycle-only") setRecurrenceChoice("prompt-next-cycle");
+          }}
+        >
+          {t("ledger.setRecurrence")}
+        </button>
+      ) : null}
+      {record.kind === "unresolved-expense" && onCompleteDetails ? (
+        <button className="set-recurrence-toggle" type="button" onClick={onCompleteDetails}>
+          {t("ledger.completeDetails")}
+        </button>
+      ) : null}
+      </div>
+      <div className="record-editor-footer full-span">
+        <div className="record-editor-actions">
+          <button className="primary-action" type="submit">{t("ledger.saveChanges")}</button>
+          <button className="quiet-action" type="button" onClick={onCancel}>{t("ledger.cancel")}</button>
+        </div>
       </div>
     </form>
   );
@@ -2470,6 +3079,7 @@ function AmountField({
   required = false,
   allowNegative = false,
   placeholder = "100",
+  currency,
   onChange,
 }: Readonly<{
   id: string;
@@ -2478,6 +3088,7 @@ function AmountField({
   required?: boolean;
   allowNegative?: boolean;
   placeholder?: string;
+  currency?: string;
   onChange: (value: string) => void;
 }>) {
   const { t } = useI18n();
@@ -2487,21 +3098,11 @@ function AmountField({
 
   return (
     <div className="form-field amount-field">
-      <label htmlFor={id}>
-        <span>{label}</span>
-      </label>
-      <div className="amount-control">
-        <input
-          id={id}
-          required={required}
-          inputMode="decimal"
-          min={allowNegative ? undefined : "0"}
-          step="1"
-          type="number"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-        />
+      <div className="amount-head">
+        <label htmlFor={id}>
+          <span>{label}</span>
+        </label>
+        {currency ? <span className="amount-currency">{currency}</span> : null}
         <div className={`amount-steps ${visibleSteps.length === 3 ? "positive-only" : ""}`} aria-label={t("ledger.quickAdjustAria", { label })}>
           {visibleSteps.map((step) => (
             <button
@@ -2516,6 +3117,19 @@ function AmountField({
             </button>
           ))}
         </div>
+      </div>
+      <div className="amount-control">
+        <input
+          id={id}
+          required={required}
+          inputMode="decimal"
+          min={allowNegative ? undefined : "0"}
+          step="1"
+          type="number"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
       </div>
     </div>
   );
@@ -3049,7 +3663,7 @@ function ManualLedgerPartyFields({
         </>
       ) : null}
       {form.kind === "expense" ? (
-        <div className="form-field">
+        <div className="form-field entry-item-name-field">
           <label htmlFor="entry-item-name"><span>{t("field.itemName")}</span></label>
           <input id="entry-item-name" required pattern=".*\S.*" disabled={form.itemNameMissing} value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
           <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.itemNameMissing} onChange={(event) => setMissingExpenseField("itemName", event.target.checked)} /><span>{t("field.itemNameMissing")}</span></label>
@@ -3126,9 +3740,8 @@ function ManualLedgerMoneyFields({
   return (
     <>
       {isTransfer ? <TransferFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectDestinationAccount={selectDestinationAccount} onSetTransferMode={setTransferMode} /> : null}
-      <AmountField id="entry-amount" label={isTransfer && form.transferMode === "cross-currency" ? t("field.sourceAmount") : t("field.amount")} required value={form.amount} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
-      <div className="form-field"><span>{isTransfer && form.transferMode === "cross-currency" ? t("field.sourceCurrency") : t("field.currency")}</span><output className="derived-value">{form.currency}</output></div>
-      {isTransfer && form.transferMode === "cross-currency" ? <><AmountField id="entry-destination-amount" label={t("field.destinationAmount")} required value={form.destinationAmount} onChange={(value) => updateForm("destinationAmount", value)} /><div className="form-field"><span>{t("field.destinationCurrency")}</span><output className="derived-value">{form.destinationCurrency}</output></div></> : null}
+      <AmountField id="entry-amount" label={isTransfer && form.transferMode === "cross-currency" ? t("field.sourceAmount") : t("field.amount")} required value={form.amount} currency={form.currency} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
+      {isTransfer && form.transferMode === "cross-currency" ? <><AmountField id="entry-destination-amount" label={t("field.destinationAmount")} required value={form.destinationAmount} currency={form.destinationCurrency} onChange={(value) => updateForm("destinationAmount", value)} /></> : null}
       {isTransfer ? <label className="full-span checkbox-field"><input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} /><span>{t("capture.addTransferFee")}</span></label> : null}
       {isTransfer && form.feeEnabled ? <FeeFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectFeeAccount={selectFeeAccount} onUpdateForm={updateForm} /> : null}
       {form.kind === "refund" ? <RefundFields form={form} selectedRefundHasDifferentCurrency={selectedRefundHasDifferentCurrency} refundDifferenceNeedsClassification={refundDifferenceNeedsClassification} refundDifferenceLabel={refundDifferenceLabel} updateForm={updateForm} /> : null}
@@ -3170,7 +3783,7 @@ function ManualLedgerDetails(props: Readonly<ManualLedgerDetailsProps>) {
   );
 }
 
-type ManualLedgerTimingFieldsProps = Pick<ManualLedgerFormProps, "form" | "isUnresolvedExpense" | "setTimePrecision" | "setMonthRange" | "updateForm"> & {
+type ManualLedgerTimingFieldsProps = Pick<ManualLedgerFormProps, "form" | "isUnresolvedExpense" | "setTimePrecision" | "setMonthRange" | "updateForm" | "setRecordKind"> & {
   hasSelectedAccount: boolean;
 };
 
@@ -3197,12 +3810,29 @@ function ManualLedgerAccountField({
 }
 
 function ManualLedgerTimingFields({
-  form, hasSelectedAccount, isUnresolvedExpense, setTimePrecision, setMonthRange, updateForm,
+  form, hasSelectedAccount, isUnresolvedExpense, setTimePrecision, setMonthRange, updateForm, setRecordKind,
 }: Readonly<ManualLedgerTimingFieldsProps>) {
   const { t } = useI18n();
   return (
     <>
-      {hasSelectedAccount && !isUnresolvedExpense ? <label className="entry-date-field"><span>{t("field.date")}</span><input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} /></label> : null}
+      {hasSelectedAccount && !isUnresolvedExpense ? (
+        <div className="form-field entry-date-field">
+          <label htmlFor="entry-date"><span>{t("field.date")}</span></label>
+          <input id="entry-date" required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+        </div>
+      ) : null}
+      {hasSelectedAccount && !isUnresolvedExpense ? (
+        <div className="form-field entry-kind-field">
+          <label htmlFor="entry-kind"><span>{t("field.kind")}</span></label>
+          <select id="entry-kind" value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
+            {draftKinds.map((kind) => (
+              <option key={kind} value={kind}>
+                {kindLabel(kind)}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       {hasSelectedAccount && isUnresolvedExpense ? (
         <section className="full-span time-precision-fields" aria-label={t("capture.unresolvedTimeAria")}>
           <fieldset className="segmented-fieldset">
@@ -3243,20 +3873,8 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
   const { t } = useI18n();
   return (
     <form className={`draft-form ${hasSelectedAccount ? "has-selected-account" : "needs-account"}`} id="manual-draft-form" onSubmit={handleSubmit}>
-              <ManualLedgerTimingFields form={form} hasSelectedAccount={hasSelectedAccount} isUnresolvedExpense={isUnresolvedExpense} setTimePrecision={setTimePrecision} setMonthRange={setMonthRange} updateForm={updateForm} />
+              <ManualLedgerTimingFields form={form} hasSelectedAccount={hasSelectedAccount} isUnresolvedExpense={isUnresolvedExpense} setTimePrecision={setTimePrecision} setMonthRange={setMonthRange} updateForm={updateForm} setRecordKind={setRecordKind} />
               <ManualLedgerAccountField form={form} accounts={accounts} isTransfer={isTransfer} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} beginQuickAccountSetup={beginQuickAccountSetup} selectSourceAccount={selectSourceAccount} />
-              {hasSelectedAccount ? (
-                <label className="entry-kind-field">
-                  <span>{t("field.kind")}</span>
-                  <select value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
-                    {draftKinds.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kindLabel(kind)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
               {hasSelectedAccount ? (
                 <ManualLedgerDetails
                   form={form}
@@ -3307,38 +3925,53 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
               )}
               {supportsRecurrence && hasSelectedAccount ? (
                 <fieldset className="recurrence-control full-span" aria-label={t("capture.nextCycleLegend")}>
-                  <legend>{t("capture.nextCycleLegend")}</legend>
-                  <label htmlFor="entry-recurrence-choice">
+                  <legend>
+                    {t("capture.nextCycleLegend")}
+                    {form.recurrenceChoice !== "current-cycle-only" && (form.date || form.periodStart) ? (
+                      <span className="recurrence-legend-date">
+                        {" · "}{t("ledger.monthlyCadence")}{form.date || form.periodStart ? ` ${shortDateOf(addMonthsClamped(form.date || form.periodStart, 1))}` : ""}
+                      </span>
+                    ) : null}
+                  </legend>
+                  <label htmlFor="entry-recurrence-choice" className="recurrence-behavior-label">
                     <span>{t("capture.recordBehavior")}</span>
                   </label>
-                  <select
-                    id="entry-recurrence-choice"
-                    disabled={!hasSelectedAccount}
-                    value={form.recurrenceChoice}
-                    onChange={(event) => updateForm("recurrenceChoice", event.target.value as DraftForm["recurrenceChoice"])}
-                  >
-                    <option value="current-cycle-only">{t("capture.currentCycleOnly")}</option>
-                    <option value="prompt-next-cycle">{t("capture.promptNextCycle")}</option>
-                    <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>{t("capture.autoRecordNextCycle")}</option>
-                  </select>
-                  <label className="checkbox-field inline-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={form.recurrenceAmountMode === "variable"}
+                  <div className={`recurrence-behavior${form.recurrenceChoice === "current-cycle-only" ? " full-span" : ""}`}>
+                    <select
+                      id="entry-recurrence-choice"
                       disabled={!hasSelectedAccount}
-                      onChange={(event) => {
-                        const variable = event.target.checked;
-                        setFormError(null);
-                        setSavedMessage("");
-                        setForm((current) => ({
-                          ...current,
-                          recurrenceAmountMode: variable ? "variable" : "fixed",
-                          recurrenceChoice: variable && current.recurrenceChoice === "auto-record-next-cycle" ? "prompt-next-cycle" : current.recurrenceChoice,
-                        }));
-                      }}
-                    />
-                    <span>{t("capture.amountMayVary")}</span>
-                  </label>
+                      value={form.recurrenceChoice}
+                      onChange={(event) => updateForm("recurrenceChoice", event.target.value as DraftForm["recurrenceChoice"])}
+                    >
+                      <option value="current-cycle-only">{t("capture.currentCycleOnly")}</option>
+                      <option value="prompt-next-cycle">{t("capture.promptNextCycle")}</option>
+                      <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>{t("capture.autoRecordNextCycle")}</option>
+                    </select>
+                  </div>
+                  {form.recurrenceChoice === "current-cycle-only" ? (
+                    <p className="field-help">{t("ledger.currentCycleOnlyHint")}</p>
+                  ) : (
+                    <>
+                      <label className="checkbox-field inline-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={form.recurrenceAmountMode === "variable"}
+                          disabled={!hasSelectedAccount}
+                          onChange={(event) => {
+                            const variable = event.target.checked;
+                            setFormError(null);
+                            setSavedMessage("");
+                            setForm((current) => ({
+                              ...current,
+                              recurrenceAmountMode: variable ? "variable" : "fixed",
+                              recurrenceChoice: variable && current.recurrenceChoice === "auto-record-next-cycle" ? "prompt-next-cycle" : current.recurrenceChoice,
+                            }));
+                          }}
+                        />
+                        <span>{t("capture.amountMayVary")}</span>
+                      </label>
+                    </>
+                  )}
                   {form.recurrenceChoice === "auto-record-next-cycle" && !autoRecordAllowed ? (
                     <p className="field-help">{t("capture.autoRecordHint")}</p>
                   ) : null}
@@ -4245,8 +4878,7 @@ function FeeFields({
   return (
     <>
       <FeeAccountField form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={onBeginQuickAccountSetup} onSelectFeeAccount={onSelectFeeAccount} />
-      <AmountField id="entry-fee-amount" label={t("field.feeAmount")} value={form.feeAmount} onChange={(value) => onUpdateForm("feeAmount", value)} />
-      <div className="form-field"><span>{t("field.feeCurrency")}</span><output className="derived-value">{form.feeCurrency}</output></div>
+      <AmountField id="entry-fee-amount" label={t("field.feeAmount")} value={form.feeAmount} currency={form.feeCurrency} onChange={(value) => onUpdateForm("feeAmount", value)} />
       <label><span>{t("field.feeCategory")}</span><input value={form.feeCategory} onChange={(event) => onUpdateForm("feeCategory", event.target.value)} placeholder={t("capture.merchantPlaceholder")} /></label>
     </>
   );
@@ -4497,7 +5129,6 @@ function AccountSetupPanel({
   const { t } = useI18n();
   return (
     <Panel title={t("settings.accountPanelTitle")} eyebrow={t("settings.accountPanelEyebrow")}>
-      <p className="panel-copy">{t("settings.accountPanelCopy")}</p>
       <div className="account-setup-actions">
         <button className="secondary-action align-start" type="button" onClick={onReopenOnboarding}>{t("settings.openOnboarding")}</button>
       </div>
@@ -4587,7 +5218,6 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   );
 }
 
-type SettingsSection = "login" | "portability" | "categories" | "preferences";
 
 type SettingsPageProps = AccountPageProps & {
   accounts: LocalAccount[];
@@ -4630,72 +5260,39 @@ function SettingsPage({
   ...accountProps
 }: Readonly<SettingsPageProps>) {
   const { t } = useI18n();
-  const [section, setSection] = useState<SettingsSection>("login");
 
-  const renderSection = () => {
-    if (section === "login") {
-      return <AccountPage {...accountProps} />;
-    }
-    if (section === "portability") {
-      return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
-    }
-    if (section === "categories") {
-      return (
-        <CategoriesPanel
-          records={records}
-          customCategories={customCategories}
-          setCustomCategories={setCustomCategories}
-        />
-      );
-    }
-    return (
+  const renderPreferences = () => (
+    <section className="settings-section" aria-labelledby="settings-preferences-heading">
+      <h2 id="settings-preferences-heading">{t("settings.preferencesTab")}</h2>
       <div className="route-stack">
-        <section className="settings-preferences-block" aria-labelledby="preferences-accounts-title">
-          <p className="eyebrow">{t("settings.accountsEyebrow")}</p>
-          <h2 id="preferences-accounts-title">{t("settings.accountsTitle")}</h2>
-          <LedgerAccountsPanel
-            accounts={accounts}
-            onAddAccount={onAddAccount}
-            onSaveInitialFunding={onSaveInitialFunding}
-            onReopenOnboarding={onReopenOnboarding}
-          />
-        </section>
+        <LedgerAccountsPanel
+          accounts={accounts}
+          onAddAccount={onAddAccount}
+          onSaveInitialFunding={onSaveInitialFunding}
+          onReopenOnboarding={onReopenOnboarding}
+        />
         <section className="settings-preferences-block" aria-labelledby="preferences-theme-title">
           <p className="eyebrow">{t("settings.appearanceEyebrow")}</p>
           <h2 id="preferences-theme-title">{t("settings.themeTitle")}</h2>
-          <p className="panel-copy">{t("settings.themeCopy")}</p>
           <ThemeControl value={themeMode} onChange={onThemeModeChange} />
         </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-delete-title">
           <p className="eyebrow">{t("settings.ledgerEyebrow")}</p>
           <h2 id="preferences-delete-title">{t("settings.deleteBehaviorTitle")}</h2>
-          <p className="panel-copy">
-            {t("settings.deleteBehaviorCopy")}
-          </p>
           <DeleteActionControl value={deleteAction} onChange={onDeleteActionChange} />
         </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-negative-title">
           <p className="eyebrow">{t("settings.accountingEyebrow")}</p>
           <h2 id="preferences-negative-title">{t("settings.negativePolicyTitle")}</h2>
-          <p className="panel-copy">
-            {t("settings.negativePolicyCopy")}
-          </p>
           <NegativeBalancePolicyControl value={negativeBalancePolicy} onChange={onNegativeBalancePolicyChange} />
         </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-localization-title">
-          <p className="eyebrow">{t("settings.localeEyebrow")}</p>
           <h2 id="preferences-localization-title">{t("settings.localeTitle")}</h2>
-          <p className="panel-copy">
-            {t("settings.localeCopy")}
-          </p>
           <LanguageControl />
         </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
           <p className="eyebrow">{t("settings.voiceEyebrow")}</p>
           <h2 id="preferences-ai-title">{t("settings.aiPreferenceTitle")}</h2>
-          <p className="panel-copy">
-            {t("settings.aiPreferenceCopy")}
-          </p>
           <EntityPolicyRow
             label={t("settings.entityAccount")}
             value={entityPolicy.account}
@@ -4708,18 +5305,23 @@ function SettingsPage({
           />
         </section>
       </div>
-    );
-  };
+    </section>
+  );
 
   return (
     <section className="settings-page">
-      <div className="settings-tabs" role="tablist" aria-label={t("settings.sectionsAria")}>
-        <button className={`settings-tab ${section === "login" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "login"} onClick={() => setSection("login")}>{t("settings.loginTab")}</button>
-        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>{t("settings.portabilityTab")}</button>
-        <button className={`settings-tab ${section === "categories" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "categories"} onClick={() => setSection("categories")}>{t("settings.categoriesTab")}</button>
-        <button className={`settings-tab ${section === "preferences" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "preferences"} onClick={() => setSection("preferences")}>{t("settings.preferencesTab")}</button>
+      <div className="route-stack">
+        <section className="settings-section" aria-labelledby="settings-login-heading">
+          <AccountPage headingId="settings-login-heading" {...accountProps} />
+        </section>
+        <section className="settings-section" aria-labelledby="settings-portability-heading">
+          <ImportExportPanel headingId="settings-portability-heading" accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+        </section>
+        <section className="settings-section" aria-labelledby="categories-title">
+          <CategoriesPanel records={records} customCategories={customCategories} setCustomCategories={setCustomCategories} />
+        </section>
+        {renderPreferences()}
       </div>
-      {renderSection()}
     </section>
   );
 }
@@ -4774,7 +5376,7 @@ function ThemeControl({ value, onChange }: Readonly<{ value: ThemeMode; onChange
   const { t } = useI18n();
   return (
     <fieldset className="entity-policy-row">
-      <legend>{t("settings.themeLegend")}</legend>
+      <legend className="visually-hidden">{t("settings.themeLegend")}</legend>
       {THEME_OPTIONS.map((option) => (
         <label key={option.value} className="entity-policy-option">
           <input type="radio" name="theme" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
@@ -4792,7 +5394,7 @@ function LanguageControl() {
   const { locale, setLocale } = useI18n();
   return (
     <fieldset className="entity-policy-row">
-      <legend>{t("settings.localeTitle")}</legend>
+      <legend className="visually-hidden">{t("settings.localeTitle")}</legend>
       {["zh-TW", "en-US"].map((code) => (
         <label key={code} className="entity-policy-option">
           <input
@@ -4869,11 +5471,7 @@ function CategoriesPanel({ records, customCategories, setCustomCategories }: Rea
 
   return (
     <section className="settings-preferences-block" aria-labelledby="categories-title">
-      <p className="eyebrow">{t("settings.categoriesEyebrow")}</p>
       <h2 id="categories-title">{t("settings.categoriesTitle")}</h2>
-      <p className="panel-copy">
-        {t("settings.categoriesCopy")}
-      </p>
       {adding ? (
         <div className="category-add-form">
           <label htmlFor="new-category-name">{t("settings.categoryNew")}</label>
@@ -4974,7 +5572,7 @@ function PasswordInput({ id, value, autoComplete, visible, onValueChange, onTogg
   );
 }
 
-function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onRecoverPasswordFromLink, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
+function AccountPage({ headingId, authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onRecoverPasswordFromLink, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -5231,14 +5829,15 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   return (
     <div className="account-page">
-      <Panel title={t("auth.optionalCloudSync")}>
+      <Panel id={headingId} title={t("auth.optionalCloudSync")}>
         {renderAccountContent()}
       </Panel>
     </div>
   );
 }
 
-function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
+function ImportExportPanel({ headingId, accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
+  headingId?: string;
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
@@ -5371,13 +5970,9 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
   };
 
   return (
-    <Panel title={t("import.panelTitle")} eyebrow={t("import.panelEyebrow")}>
-      <p className="panel-copy">
-        {t("import.panelCopy")}
-      </p>
+    <Panel id={headingId} title={t("import.panelTitle")} eyebrow={t("import.panelEyebrow")}>
       <section className="portability-section" aria-labelledby="ledger-export-heading">
         <h3 id="ledger-export-heading">{t("import.exportHeading")}</h3>
-        <p className="panel-copy">{t("import.exportCopy")}</p>
         <div className="export-actions">
           <button className="primary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage(t("import.csvDownloaded")); }}>{t("import.exportCsv")}</button>
           <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage(t("import.jsonDownloaded")); }}>{t("import.exportJson")}</button>
@@ -5443,13 +6038,13 @@ function NotFoundPage({ navigate }: Readonly<{ navigate: (item: NavItem) => void
   );
 }
 
-function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow?: string; children: React.ReactNode }>) {
+function Panel({ title, eyebrow, id, children }: Readonly<{ title: string; eyebrow?: string; id?: string; children: React.ReactNode }>) {
   return (
     <article className="panel">
       <div className="panel-heading">
         <div>
           {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-          <h2>{title}</h2>
+          <h2 id={id}>{title}</h2>
         </div>
       </div>
       {children}

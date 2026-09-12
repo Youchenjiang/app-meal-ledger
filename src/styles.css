@@ -1218,6 +1218,12 @@ h2 {
   gap: 16px;
 }
 
+.settings-section {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
 .settings-preferences-block {
   display: grid;
   min-width: 0;
@@ -1608,6 +1614,22 @@ h2 {
   border-radius: 8px;
 }
 
+/* Override the generic fieldset border/padding for entry-details and
+   recurrence-control, which should be borderless grid containers (not
+   visually boxed sections). */
+.draft-form .entry-details {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.draft-form .recurrence-control {
+  padding: 6px 0 0;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+}
+
 .draft-form fieldset legend {
   padding: 0 6px;
   color: var(--text-secondary);
@@ -1634,6 +1656,27 @@ h2 {
   flex: 0 0 auto;
 }
 
+/* The quick-adjust steps sit in the field's title row, right next to the
+   label, instead of stacking below the input. */
+.amount-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.amount-head > label {
+  flex: 0 0 auto;
+}
+
+.amount-head .amount-currency {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .amount-control {
   display: grid;
   gap: 6px;
@@ -1656,25 +1699,21 @@ h2 {
 }
 
 .amount-steps {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-}
-
-.amount-steps.positive-only {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .amount-step {
   min-width: 0;
-  min-height: 42px;
-  padding: 0 2px;
+  min-height: 26px;
+  padding: 0 6px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   color: var(--brand-text);
   background: var(--bg-surface);
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1732,23 +1771,45 @@ h2 {
 
 .recurrence-control {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   min-width: 0;
-  padding: 12px 0 0;
+  padding: 6px 0 0;
   border: 0;
   border-top: 1px solid var(--border);
 }
 
 .recurrence-control legend {
+  grid-column: 1 / -1;
   padding: 0;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
 
-.recurrence-control > label:not(.checkbox-field) {
-  display: grid;
-  gap: 6px;
+/* The concrete next-cycle date sits inline in the section title once the
+   controls are expanded, so the schedule is visible without a duplicate card. */
+.recurrence-legend-date {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 記錄行為 label spans both columns on top; the select and the
+   amount-may-vary checkbox share the row below, so their text baselines
+   align without stacking the label above the select. */
+.recurrence-behavior-label {
+  grid-column: 1 / -1;
+}
+
+.recurrence-behavior {
+  min-width: 0;
+}
+
+.recurrence-control > .recurrence-summary,
+.recurrence-control > .field-help,
+.recurrence-control > .collapse-recurrence {
+  grid-column: 1 / -1;
 }
 
 .segmented-control label {
@@ -1844,7 +1905,7 @@ h2 {
 }
 
 .quick-account > label:not(.checkbox-row) > span,
-.quick-account .amount-field > label > span {
+.quick-account .amount-field .amount-head > label > span {
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
@@ -1942,23 +2003,34 @@ h2 {
   border: 0;
 }
 
-.draft-form > .entry-date-field,
-.draft-form > .time-precision-fields {
-  order: 0;
+/* Amount field spans full width in the entry-details grid so the
+   quick-step buttons have room and the currency badge sits inline. */
+.entry-details > .amount-field {
+  grid-column: 1 / -1;
 }
 
-.draft-form > .entry-kind-field {
-  order: 1;
+/* Item name sits alone in the 2-col grid (paired with nothing) — make it
+   full-span so the checkbox label has room and no empty half remains. */
+.entry-details .entry-item-name-field {
+  grid-column: 1 / -1;
+}
+
+.draft-form > .entry-date-field,
+.draft-form > .entry-kind-field,
+.draft-form > .time-precision-fields {
+  order: 0;
 }
 
 .draft-form > .entry-details,
 .draft-form > .entry-details-locked {
   order: 2;
+  margin-top: 4px;
 }
 
 .draft-form > .entry-account-field,
 .draft-form > .entry-account-last {
-  order: 3;
+  order: 1;
+  grid-column: 1 / -1;
 }
 
 .draft-form.needs-account > .entry-account-field {
@@ -2074,28 +2146,367 @@ h2 {
 
 .ledger-record-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(52px, 0.9fr) auto auto;
+  grid-template-areas: "date name meta amount actions";
   align-items: center;
+  column-gap: 6px;
+  min-height: 26px;
+  padding: 3px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
-.ledger-record-card .record-summary {
+.ledger-record-card .record-date {
+  grid-area: date;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ledger-record-card .record-name {
+  grid-area: name;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.ledger-record-card .record-item {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.ledger-record-card .record-merchant {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.ledger-record-card .record-amount {
+  grid-area: amount;
+  justify-self: end;
   min-width: 0;
 }
 
-.ledger-record-card .record-summary strong {
-  overflow-wrap: anywhere;
+.ledger-record-card .record-amount strong {
+  white-space: nowrap;
+  font-size: 12px;
 }
 
-.ledger-record-card .record-detail {
-  overflow-wrap: anywhere;
+.ledger-record-card .record-meta {
+  grid-area: meta;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.ledger-record-card .record-detail-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ledger-record-card .record-status {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border: 1px solid var(--amber-border);
+  border-radius: 999px;
+  color: var(--amber-strong);
+  background: var(--amber-bg);
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .ledger-record-card .record-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
   justify-content: flex-end;
+  width: auto;
+  flex-wrap: nowrap;
 }
 
-.ledger-record-card .record-actions > button {
-  flex: 0 1 auto;
+.ledger-record-card .record-state-label {
+  grid-area: actions;
+  justify-self: end;
+  font-size: 11px;
+}
+
+.ledger-record-card .icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ledger-record-card .icon-action:hover,
+.ledger-record-card .icon-action.active {
+  color: var(--text-strong);
+  background: var(--bg-surface);
+}
+
+.ledger-history {
+  display: grid;
+  gap: 12px;
+}
+
+.ledger-kind-section {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--amber-border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.ledger-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ledger-section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ledger-section-heading > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ledger-section-rows {
+  display: grid;
+  gap: 4px;
+}
+
+.ledger-filter-bar {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+}
+
+.ledger-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ledger-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.ledger-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.ledger-search input:focus {
+  outline: none;
+}
+
+.filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 170px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-button:hover,
+.filter-button.active {
+  color: var(--amber-strong);
+  border-color: var(--amber-border);
+  background: var(--amber-bg);
+}
+
+.filter-button-label {
+  white-space: nowrap;
+}
+
+.filter-button-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.filter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-clear:hover {
+  color: var(--text-strong);
+}
+
+.ledger-account-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 1px;
+  scrollbar-width: none;
+}
+
+.ledger-account-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.account-chip {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.account-chip:hover,
+.account-chip.active {
+  color: var(--amber-strong);
+  border-color: var(--amber-border);
+  background: var(--amber-bg);
+  font-weight: 700;
+}
+
+.ledger-select {
+  position: relative;
+}
+
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  max-width: min(300px, 92vw);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+}
+
+.filter-popover-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.filter-popover > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filter-popover > button:hover,
+.filter-popover > button.selected {
+  background: var(--bg-surface);
+  color: var(--amber-strong);
+}
+
+.filter-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-option-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.filter-popover-empty {
+  margin: 4px 2px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .draft-card div,
@@ -2203,13 +2614,237 @@ h2 {
 }
 
 .record-editor {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 14px;
   border: 1px solid var(--brand-focus);
   border-radius: 8px;
   background: var(--brand-tint-3);
+}
+
+/* The editor floats above the list instead of replacing the row, so the
+   history stays put while editing. */
+.editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  overflow-y: auto;
+  /* Even on a very short viewport the fallback overlay scroll must never
+     show a scrollbar — the dialog should look like a fixed window. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.editor-backdrop::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+  /* Centered via margin auto: when the form is taller than a short viewport
+     the whole overlay scrolls as one unit (no inner scrollbar in a box). */
+  margin: auto;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-surface-2);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
+}
+
+.editor-panel-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-panel-header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.editor-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-panel .record-editor {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+/* The dialog sizes to its content and never scrolls internally; the overlay
+   scrolls instead when the form is taller than a short viewport. */
+.record-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 2px;
+}
+
+/* The amount field keeps its quick-step buttons on one row, so it spans the
+   full width; category/merchant/item/reason pair up two per row. */
+.record-editor-fields > .amount-field {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 380px) {
+  .record-editor-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Fixed action footer: save/cancel always stay visible while the fields
+   scroll, instead of being buried at the bottom of the content. */
+.record-editor-footer {
+  display: grid;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+  box-shadow: 0 -6px 16px rgb(0 0 0 / 0.35);
+}
+
+.record-editor-footer .record-editor-actions {
+  justify-content: space-between;
+}
+
+.record-editor-footer .primary-action {
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+/* One-line entry points inside the form (turn a record recurring / complete
+   details for unresolved expenses); expand into the full controls. */
+.set-recurrence-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  color: var(--brand-text);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Compact summary of a recurring record's cycle: current behavior plus the
+   pause / cancel / edit controls, so the dialog stays short enough to fit
+   without internal scrolling. */
+
+.recurrence-summary {
+  display: grid;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.recurrence-summary .secondary-action,
+.recurrence-summary .text-action {
+  min-height: 30px;
+}
+
+/* The recurring schedule line shows the concrete next occurrence (frequency +
+   next date + next amount) — the info users actually scan for — instead of
+   abstract settings labels. */
+.recurrence-summary-schedule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recurrence-summary-schedule strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.recurrence-paused-badge {
+  padding: 1px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  background: var(--bg-surface-2);
+}
+
+.recurrence-summary-text {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.recurrence-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.set-recurrence-toggle:hover,
+.set-recurrence-toggle:focus-visible {
+  border-color: var(--brand-focus);
+  background: var(--brand-tint-3);
+}
+
+/* Collapse link at the bottom of the expanded cycle settings preview. */
+.collapse-recurrence {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.collapse-recurrence:hover,
+.collapse-recurrence:focus-visible {
+  color: var(--brand-text);
+  text-decoration: underline;
+}
+
+.record-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.confirm-dialog-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .record-editor label {
@@ -2221,9 +2856,10 @@ h2 {
 }
 
 .record-editor input,
+.record-editor select,
 .record-editor textarea {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   padding: 8px 10px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -2233,8 +2869,28 @@ h2 {
 }
 
 .record-editor textarea {
-  min-height: 70px;
-  resize: vertical;
+  min-height: 52px;
+  resize: none;
+}
+
+/* Checkboxes inside the editor must not inherit the text-input styling
+   (width: 100% / min-height: 40px / padding) that .record-editor input
+   applies — otherwise they render as a full-width box with the label
+   text wrapped below. */
+.record-editor .checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-editor .checkbox-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  accent-color: var(--brand);
 }
 
 .voided-record {
@@ -2559,31 +3215,6 @@ button.action-card.unavailable {
   .capture-intent-button:last-child {
     grid-column: 1 / -1;
   }
-
-  .ledger-record-card {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .ledger-record-card .record-amount {
-    align-items: baseline;
-    display: flex;
-    justify-content: space-between;
-    text-align: left;
-    width: 100%;
-  }
-
-  .ledger-record-card .record-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .ledger-record-card .record-actions > button {
-    width: 100%;
-    min-height: 40px;
-  }
 }
 
 @media (max-width: 560px) {
@@ -2624,10 +3255,6 @@ button.action-card.unavailable {
   }
 
   .planned-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .record-editor {
     grid-template-columns: 1fr;
   }
 
@@ -2673,23 +3300,6 @@ button.action-card.unavailable {
   .status-item strong {
     line-height: 1.2;
     overflow-wrap: anywhere;
-  }
-
-  .ledger-record-card {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .ledger-record-card .record-amount {
-    align-items: baseline;
-    display: flex;
-    justify-content: space-between;
-    text-align: left;
-    width: 100%;
-  }
-
-  .ledger-record-card .record-actions > button {
-    flex: 1 1 0;
   }
 
   .sync-issue {

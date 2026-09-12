@@ -80,7 +80,16 @@ export type OfficialRecordOptions = {
 
 export type EditableRecordFields = Pick<
   LocalLedgerRecord,
-  "amount" | "category" | "counterparty" | "itemName" | "refundReason" | "reason" | "note" | "recurrenceStatus"
+  | "amount"
+  | "category"
+  | "counterparty"
+  | "itemName"
+  | "refundReason"
+  | "reason"
+  | "note"
+  | "recurrenceChoice"
+  | "recurrenceAmountMode"
+  | "recurrenceStatus"
 >;
 
 export type UnresolvedExpenseConversion = Pick<
