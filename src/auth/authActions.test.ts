@@ -100,12 +100,12 @@ describe("password auth action", () => {
     expect(resetMock).toHaveBeenCalledWith("user@example.com", {});
   });
 
-  test("explains the platform email rate limit instead of a bare error", async () => {
+  test("explains the platform email rate limit in user-facing language", async () => {
     const resetMock = vi.fn().mockResolvedValue({ error: new Error("Email rate limit exceeded") });
 
     await expect(requestPasswordReset(recoveryClient(resetMock), "user@example.com")).resolves.toEqual({
       ok: false,
-      message: "電子郵件超出頻率限制。Supabase 預設郵件服務每小時僅允許 2 封 — 請稍後再試,或在 Supabase 後台設定 Custom SMTP 以解除限制。",
+      message: "寄送次數過多,請稍後再試。",
     });
   });
 

@@ -398,13 +398,11 @@ export const zhTW: Record<string, string> = {
   "meal.photoCreateFailed": "無法建立照片,請改用「選擇照片」。",
   "meal.panelTitle": "記錄餐點",
   "meal.panelEyebrow": "選填的餐點記錄",
-  "meal.panelCopy": "餐點可單獨記錄、附多張照片,之後也可與明細記錄連結。",
   "meal.dialogTitle": "拍攝餐點照片",
   "meal.cameraAria": "相機預覽",
 
   // --- scan ---
   "scan.temporarySource": "暫時來源",
-  "scan.panelCopy": "掃描在明確保留或丟棄前維持暫時狀態,不會建立正式明細記錄。",
   "scan.images": "掃描圖片",
   "scan.selectedCount": "已選擇 {count}。",
   "scan.keepDraft": "保留掃描草稿",
@@ -429,7 +427,6 @@ export const zhTW: Record<string, string> = {
   // --- attachment ---
   "attach.panelTitle": "附加照片",
   "attach.eyebrow": "佐證資料",
-  "attach.panelCopy": "附加一或多張照片,不建立餐點或明細記錄。照片與乾淨的明細匯出分開存放。",
   "attach.photoLabel": "照片",
   "attach.photoAria": "附件照片",
   "attach.ready": "{count} 張照片已可附加。",
@@ -573,7 +570,6 @@ export const zhTW: Record<string, string> = {
   "auth.handoffMedia": "媒體",
   "auth.confirmCloudHandoff": "確認雲端交接",
   "auth.signOut": "登出",
-  "auth.cloudEnabled": "此工作區已啟用雲端同步。",
   "auth.signInMethods": "登入方式",
   "auth.emailPassword": "電子郵件與密碼",
   "auth.primary": "主要",
@@ -587,7 +583,7 @@ export const zhTW: Record<string, string> = {
   "auth.noSession": "驗證未回傳工作區工作階段。",
   "auth.alreadyRegistered": "此電子郵件已註冊帳戶,請用密碼登入。",
   "auth.signUpVerifyEmail": "帳戶已建立。請驗證電子郵件後登入,以啟用雲端同步。",
-  "auth.rateLimited": "電子郵件超出頻率限制。Supabase 預設郵件服務每小時僅允許 2 封 — 請稍後再試,或在 Supabase 後台設定 Custom SMTP 以解除限制。",
+  "auth.rateLimited": "寄送次數過多,請稍後再試。",
   "auth.resetSent": "重設密碼的連結已寄出,請檢查電子郵件。",
   "auth.passwordUpdated": "密碼已更新,可以繼續進行雲端設定。",
   "auth.oauthOpening": "正在開啟 {provider} 登入…",

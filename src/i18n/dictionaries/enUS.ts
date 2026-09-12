@@ -397,13 +397,11 @@ export const enUS: Record<string, string> = {
   "meal.photoCreateFailed": "Could not create the photo; use \"Choose photos\" instead.",
   "meal.panelTitle": "Record meal",
   "meal.panelEyebrow": "Optional meal record",
-  "meal.panelCopy": "A meal can be recorded on its own with multiple photos and linked to ledger records later.",
   "meal.dialogTitle": "Take a meal photo",
   "meal.cameraAria": "Camera preview",
 
   // --- scan ---
   "scan.temporarySource": "Temporary source",
-  "scan.panelCopy": "Scans stay temporary until explicitly kept or discarded; they never create official records.",
   "scan.images": "Scan images",
   "scan.selectedCount": "Selected {count}.",
   "scan.keepDraft": "Keep scan draft",
@@ -428,7 +426,6 @@ export const enUS: Record<string, string> = {
   // --- attachment ---
   "attach.panelTitle": "Attach photos",
   "attach.eyebrow": "Supporting evidence",
-  "attach.panelCopy": "Attach one or more photos without creating a meal or ledger record. Photos are stored separately from clean ledger exports.",
   "attach.photoLabel": "Photos",
   "attach.photoAria": "Attachment photos",
   "attach.ready": "{count} photos are ready to attach.",
@@ -572,7 +569,6 @@ export const enUS: Record<string, string> = {
   "auth.handoffMedia": "Media",
   "auth.confirmCloudHandoff": "Confirm cloud handoff",
   "auth.signOut": "Sign out",
-  "auth.cloudEnabled": "This workspace has cloud sync enabled.",
   "auth.signInMethods": "Sign-in methods",
   "auth.emailPassword": "Email and password",
   "auth.primary": "Primary",
@@ -586,7 +582,7 @@ export const enUS: Record<string, string> = {
   "auth.noSession": "Authentication did not return a workspace session.",
   "auth.alreadyRegistered": "This email already has an account; sign in with your password.",
   "auth.signUpVerifyEmail": "Account created. Verify your email and sign in to enable cloud sync.",
-  "auth.rateLimited": "Email rate limit exceeded. Supabase's default mail service allows only 2 per hour — try again later, or configure Custom SMTP in the Supabase dashboard to lift the limit.",
+  "auth.rateLimited": "Too many emails have been sent; please try again later.",
   "auth.resetSent": "A password reset link has been sent; check your email.",
   "auth.passwordUpdated": "Password updated; you can continue with cloud setup.",
   "auth.oauthOpening": "Opening {provider} sign-in…",

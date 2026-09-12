@@ -98,7 +98,7 @@ describe("app auth boundary", () => {
     expect(screen.getByLabelText("本機資料交接摘要")).toHaveTextContent("帳戶0記錄0草稿0餐點0媒體0");
 
     await user.click(screen.getByRole("button", { name: "確認雲端交接" }));
-    expect(await screen.findByText("此工作區已啟用雲端同步。")).toBeInTheDocument();
+    expect(await screen.findByText("雲端同步就緒")).toBeInTheDocument();
   });
 
   test("links and unlinks provider identities from the signed-in account", async () => {
@@ -125,7 +125,7 @@ describe("app auth boundary", () => {
     await user.type(screen.getByLabelText("密碼"), "secret");
     await user.click(screen.getByRole("button", { name: "繼續" }));
     await user.click(await screen.findByRole("button", { name: "確認雲端交接" }));
-    await screen.findByText("此工作區已啟用雲端同步。");
+    await screen.findByText("雲端同步就緒");
 
     const methods = screen.getByRole("group", { name: "登入方式" });
     expect(within(methods).getByText("電子郵件與密碼")).toBeInTheDocument();

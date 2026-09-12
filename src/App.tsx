@@ -4184,7 +4184,6 @@ function MealCapturePanel(props: Readonly<React.ComponentProps<typeof MealCaptur
   const { t } = useI18n();
   return (
     <Panel key="record-meal" title={t("meal.panelTitle")} eyebrow={t("meal.panelEyebrow")}>
-      <p className="panel-copy">{t("meal.panelCopy")}</p>
       <MealCaptureForm {...props} />
     </Panel>
   );
@@ -4297,7 +4296,6 @@ function ScanCapturePanel({
   const { t } = useI18n();
   return (
     <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow={t("scan.temporarySource")}>
-      <p className="panel-copy">{t("scan.panelCopy")}</p>
       <form className="meal-form" onSubmit={onSubmit}>
         <label>
           <span>{t("scan.images")}</span>
@@ -4413,7 +4411,6 @@ function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSa
   const { t } = useI18n();
   return (
     <Panel key="attach-photo" title={t("attach.panelTitle")} eyebrow={t("attach.eyebrow")}>
-      <p className="panel-copy">{t("attach.panelCopy")}</p>
       <form className="meal-form" onSubmit={onSubmit}>
         <label>
           <span>{t("attach.photoLabel")}</span>
@@ -5173,7 +5170,6 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     const hasEmailIdentity = identities.some((identity) => identity.provider === "email");
     return (
       <div className="auth-form account-page-form">
-        <p className="field-help">{t("auth.cloudEnabled")}</p>
         <output className={`account-storage-status ${storageStatus.tone}`} aria-live="polite">
           <strong>{storageStatus.label}</strong>
           <span>{storageStatus.detail}</span>
