@@ -687,13 +687,7 @@ export const enUS: Record<string, string> = {
   // --- cloud persistence ---
   "cloud.requestFailed": "Cloud request failed.",
   "cloud.bootstrapMissing": "Cloud reference response is missing: {names}.",
-  "cloud.draftGone": "The local draft no longer exists.",
-  "cloud.accountGone": "The local account no longer exists.",
   "cloud.accountRefMissing": "No cloud account reference was returned.",
-  "cloud.mediaGone": "The local media metadata no longer exists.",
-  "cloud.scanGone": "The local scan metadata no longer exists.",
-  "cloud.mealGone": "The local meal metadata no longer exists.",
-  "cloud.recordGone": "The local record no longer exists.",
   "cloud.idempotencyReuse": "The idempotency key was reused with different request content.",
   "cloud.accountsSameUser": "Account rows must belong to the same user_id.",
   "cloud.profileNeedsUser": "Profile rows require a user_id.",

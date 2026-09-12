@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import type { CloudPersistenceClient, CloudRow } from "./contracts";
-import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./syncService";
-import { enqueueRecordSync } from "./syncQueue";
+import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedQueue, mergeSyncedScans, syncLocalChanges } from "./syncService";
+import { enqueueRecordSync, type CloudSyncQueueItem } from "./syncQueue";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
 import type { MealEntry } from "../captureMedia/meals";
@@ -51,6 +51,33 @@ test("does not restore queue items removed while cloud sync was in flight", () =
   ];
 
   expect(mergeSyncedItems(current, staleSyncResult)).toEqual([{ id: "still-present", state: "synced" }]);
+});
+
+function queueItem(id: string, overrides: Partial<CloudSyncQueueItem> = {}): CloudSyncQueueItem {
+  return {
+    id,
+    target: "record",
+    targetId: id,
+    actionType: "record-bundle",
+    idempotencyKey: id,
+    requestHash: id,
+    state: "pending",
+    attempts: 0,
+    nextAttemptAt: null,
+    lastError: "",
+    createdAt: syncNow,
+    updatedAt: syncNow,
+    ...overrides,
+  };
+}
+
+test("removes dropped queue items while keeping concurrent enqueues", () => {
+  const snapshot = [queueItem("ghost-record"), queueItem("kept-record")];
+  const synced = [queueItem("kept-record", { state: "synced" })];
+  const current = [...snapshot, queueItem("record-added-during-sync")];
+
+  expect(mergeSyncedQueue(current, synced, snapshot).map((item) => item.id)).toEqual(["kept-record", "record-added-during-sync"]);
+  expect(mergeSyncedQueue(current, synced, snapshot)[0].state).toBe("synced");
 });
 const baseRecord = {
   id: "record-1", idempotencyKey: "action-1", userId: "local-user", kind: "expense", status: "local-only", recordState: "active", version: 1,
@@ -154,6 +181,17 @@ describe("cloud sync service", () => {
 
     expect(result.records[0].status).toBe("synced");
     expect(result.queue[0].state).toBe("synced");
+  });
+
+  test("drops a queue item whose local record no longer exists instead of failing forever", async () => {
+    const ghostQueue = enqueueRecordSync([], baseRecord, syncNow);
+    const result = await syncLocalChanges(input({
+      records: [],
+      queue: ghostQueue,
+    }));
+
+    expect(result.records).toEqual([]);
+    expect(result.queue).toEqual([]);
   });
 
   test("rebinds a stale local account id by its current account name", async () => {

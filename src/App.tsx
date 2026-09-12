@@ -56,7 +56,7 @@ import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retain
 import { queueUploadFiles, uploadMediaFile, validateMediaBatch, type SignedUploadClient, type UploadQueueItem } from "./captureMedia/upload";
 import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient, type RawSupabaseClient } from "./cloudPersistence/supabaseClient";
 import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
-import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
+import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedQueue, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel, AiModeSwitch } from "./ai/AiLedgerPanel";
 import { readAiEntityPolicy, writeAiEntityPolicy, type AiEntityPolicy, type AiEntityPolicyOption } from "./ai/entityPolicy";
@@ -1179,6 +1179,7 @@ function AuthenticatedApp() {
     const client = createSupabasePersistenceClient(rawClient);
     const referenceClient = createSupabaseReferenceBootstrapClient(rawClient);
     const now = new Date().toISOString();
+    const queueSnapshot = cloudSyncQueue;
 
     const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
     const merchantKinds = new Set(["expense", "refund", "unresolved-expense"]);
@@ -1201,14 +1202,14 @@ function AuthenticatedApp() {
       meals,
       media: uploadQueue,
       scans,
-      queue: cloudSyncQueue,
+      queue: queueSnapshot,
       now,
     }).then((result) => {
       setRecords(result.records);
       setMeals(result.meals);
       setUploadQueue((current) => mergeSyncedItems(current, result.media));
       setScans((current) => mergeSyncedScans(current, result.scans));
-      setCloudSyncQueue((current) => mergeSyncedItems(current, result.queue));
+      setCloudSyncQueue((current) => mergeSyncedQueue(current, result.queue, queueSnapshot));
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "雲端同步失敗。";
       setCloudSyncQueue((current) => markCloudSyncRetryable(current, message));

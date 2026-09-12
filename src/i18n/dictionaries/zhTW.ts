@@ -688,13 +688,7 @@ export const zhTW: Record<string, string> = {
   // --- cloud persistence ---
   "cloud.requestFailed": "雲端請求失敗。",
   "cloud.bootstrapMissing": "雲端參照回應缺少:{names}。",
-  "cloud.draftGone": "本機草稿已不存在。",
-  "cloud.accountGone": "本機帳戶已不存在。",
   "cloud.accountRefMissing": "雲端帳戶參照未回傳。",
-  "cloud.mediaGone": "本機媒體中繼資料已不存在。",
-  "cloud.scanGone": "本機掃描中繼資料已不存在。",
-  "cloud.mealGone": "本機餐點中繼資料已不存在。",
-  "cloud.recordGone": "本機記錄已不存在。",
   "cloud.idempotencyReuse": "冪等金鑰被以不同的請求內容重複使用。",
   "cloud.accountsSameUser": "帳戶列必須屬於同一個 user_id。",
   "cloud.profileNeedsUser": "Profile 列需要 user_id。",
