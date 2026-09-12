@@ -2274,15 +2274,32 @@ h2 {
 }
 
 /* One line cannot hold date, title, merchant, account · category, badge,
-   amount, and two actions below this width. Give the meta its own row rather
-   than ellipsising the account and category into a stub. */
-@media (max-width: 440px) {
+   amount, and two actions once the row itself drops below ~404px (this
+   container minus its 12px padding). Give the meta its own row rather than
+   ellipsising the account and category into a stub. The query is on the row's
+   container, so a narrow panel on a wide screen and a narrow phone behave the
+   same way. */
+@container ledger-rows (max-width: 404px) {
   .ledger-record-card {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       "date name amount actions"
       "date meta status actions";
     row-gap: 1px;
+  }
+}
+
+/* Engines without container queries use the viewport as a coarser proxy for
+   the same intent, so narrow screens do not fall back to the clipped row. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 440px) {
+    .ledger-record-card {
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-areas:
+        "date name amount actions"
+        "date meta status actions";
+      row-gap: 1px;
+    }
   }
 }
 
@@ -2295,6 +2312,9 @@ h2 {
   display: grid;
   gap: 6px;
   padding: 12px;
+  /* Rows size themselves against this container instead of the viewport: the
+     ledger also renders inside narrow panels on wide screens. */
+  container: ledger-rows / inline-size;
   border: 1px solid var(--amber-border);
   border-radius: 8px;
   background: var(--bg-surface);

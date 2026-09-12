@@ -12,7 +12,7 @@
 
 ## 2. 單列內容（已定案）
 
-- 一行內容：**MM/DD 日期（獨立窄欄）+ 標題（有品項時顯示品項、否則商家/來源）+ 商家小字（標題為品項時的第二行）+ 帳戶 · 類別（次要文字）+ 金額（右）**，狀態徽章緊貼；長內容 ellipsis 截斷。日期獨立成窄欄是為了不讓完整日期吃光 meta 空間，確保帳戶與類別這兩維度可見。標題以**購買的項目**優先（產品需求「Expense item/name is separate from merchant」），商家在標題下方仍可見。**軌道優先序**：`meta` 的 fr（1.15）大於標題（1），且狀態徽章**獨立成一個 track**——徽章原本與 meta 共用軌道、又吃掉 41px，導致帳戶·類別在 470px 以下被截成 `Da…`。**窄螢幕 fallback**：`max-width: 440px` 時 meta 換到自己的第二列（`"date name amount actions" / "date meta status actions"`），換取完整可讀的帳戶·類別（列高 56px，仍在 e2e 的 100px 上限內）。
+- 一行內容：**MM/DD 日期（獨立窄欄）+ 標題（有品項時顯示品項、否則商家/來源）+ 商家小字（標題為品項時的第二行）+ 帳戶 · 類別（次要文字）+ 金額（右）**，狀態徽章緊貼；長內容 ellipsis 截斷。日期獨立成窄欄是為了不讓完整日期吃光 meta 空間，確保帳戶與類別這兩維度可見。標題以**購買的項目**優先（產品需求「Expense item/name is separate from merchant」），商家在標題下方仍可見。**軌道優先序**：`meta` 的 fr（1.15）大於標題（1），且狀態徽章**獨立成一個 track**——徽章原本與 meta 共用軌道、又吃掉 41px，導致帳戶·類別在 470px 以下被截成 `Da…`。**窄容器 fallback**：`@container ledger-rows (max-width: 404px)`，查詢錨在 `.ledger-kind-section`（`container: ledger-rows / inline-size`），所以判準是**列自己的容器寬度**而不是視窗寬度——窄面板與窄手機行為一致，不支援 container query 的引擎才退回 `@supports not (container-type: inline-size)` 內的 440px media query。觸發時 meta 換到自己的第二列（`"date name amount actions" / "date meta status actions"`），換取完整可讀的帳戶·類別（列高 56px，仍在 e2e 的 100px 上限內）。
 - 動作只留**圖示**，同一行兩個：修改（鉛筆）、刪除（垃圾桶）。
 - 「⋯」溢位選單已移除：情境動作（復發控制：暫停/恢復/取消週期，僅復發型紀錄；補齊資料，僅缺漏支出）收進浮動編輯視窗的 footer，編輯與刪除因此集中在同一介面。
 - **刪除行為由設定決定（已定案）**：預設**作廢**（保留歷史、不計入餘額/報表），可在設定改為**真正刪除**（紀錄直接移除）——開關本身在[設定分區計畫](settings-restructure-plan.md)落地（行為規格見 [settings spec](../specs/settings/requirements.md)），本階段負責明細列的刪除動作依設定執行。
