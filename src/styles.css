@@ -2146,8 +2146,11 @@ h2 {
 
 .ledger-record-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(52px, 0.9fr) auto auto;
-  grid-template-areas: "date name meta amount actions";
+  /* The meta column outranks the title column: the row exists to keep date,
+     account, and category readable, so the title is what gives way first.
+     The status badge has its own track instead of eating the meta width. */
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.15fr) auto auto auto;
+  grid-template-areas: "date name meta status amount actions";
   align-items: center;
   column-gap: 6px;
   min-height: 26px;
@@ -2219,7 +2222,8 @@ h2 {
 }
 
 .ledger-record-card .record-status {
-  flex: 0 0 auto;
+  grid-area: status;
+  justify-self: end;
   padding: 0 5px;
   border: 1px solid var(--amber-border);
   border-radius: 999px;
@@ -2267,6 +2271,19 @@ h2 {
 .ledger-record-card .icon-action.active {
   color: var(--text-strong);
   background: var(--bg-surface);
+}
+
+/* One line cannot hold date, title, merchant, account · category, badge,
+   amount, and two actions below this width. Give the meta its own row rather
+   than ellipsising the account and category into a stub. */
+@media (max-width: 440px) {
+  .ledger-record-card {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "date name amount actions"
+      "date meta status actions";
+    row-gap: 1px;
+  }
 }
 
 .ledger-history {

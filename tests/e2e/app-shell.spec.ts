@@ -96,11 +96,14 @@ test("keeps compact ledger rows readable at 320px", async ({ page }) => {
     const cardBox = element.getBoundingClientRect();
     const name = element.querySelector(".record-name")?.getBoundingClientRect();
     const meta = element.querySelector(".record-meta")?.getBoundingClientRect();
+    const detail = element.querySelector(".record-detail-line");
     const iconTops = [...element.querySelectorAll(".record-actions button")].map((button) => Math.round(button.getBoundingClientRect().top));
     return {
       rowHeight: cardBox.height,
       nameWidth: Math.round(name?.width ?? 0),
       metaWidth: Math.round(meta?.width ?? 0),
+      detailWidth: Math.ceil(detail?.getBoundingClientRect().width ?? 0),
+      detailScrollWidth: detail?.scrollWidth ?? 0,
       iconRows: new Set(iconTops).size,
     };
   }));
@@ -108,9 +111,16 @@ test("keeps compact ledger rows readable at 320px", async ({ page }) => {
   expect(metrics[0].nameWidth).toBeGreaterThan(50);
   // The secondary meta line must also be visible, not starved to nothing.
   expect(metrics[0].metaWidth).toBeGreaterThan(50);
-  // The three icon actions must stay on a single row.
+  // Account · category is the dimension this row exists to expose, so it must
+  // render in full at the narrowest supported width — not clipped into a "Da…"
+  // stub, which is what happened while the meta column sat behind the title
+  // column and shared its track with the status badge.
+  expect(metrics[0].detailWidth).toBeGreaterThan(50);
+  expect(metrics[0].detailScrollWidth).toBeLessThanOrEqual(metrics[0].detailWidth + 1);
+  // The two icon actions must stay on a single row.
   expect(metrics[0].iconRows).toBe(1);
-  // At 320px a row may wrap to two lines but never more.
+  // Below the 440px breakpoint the meta wraps to its own row, so a row is three
+  // text lines tall there but never more.
   expect(metrics[0].rowHeight).toBeLessThan(100);
   expect(errors).toEqual([]);
 });

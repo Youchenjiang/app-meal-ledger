@@ -2352,8 +2352,8 @@ function LedgerRecordCard({ record, onEdit, onDelete, deleteAction }: Readonly<L
       </span>
       <span className="record-meta">
         <span className="record-detail-line">{recordMetaLine(record)}</span>
-        {record.status === "local-only" && !isVoided ? <em className="record-status">{t("ledger.localOnly")}</em> : null}
       </span>
+      {record.status === "local-only" && !isVoided ? <em className="record-status">{t("ledger.localOnly")}</em> : null}
       <div className="draft-amount record-amount">
         <strong>{record.currency} {record.amount}</strong>
       </div>
