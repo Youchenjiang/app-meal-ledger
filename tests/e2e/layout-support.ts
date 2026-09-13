@@ -8,11 +8,6 @@ import { expect, type Locator, type Page } from "@playwright/test";
 export function collectBrowserErrors(page: Page): string[] {
   const errors: string[] = [];
 
-  // The dev server serves no favicon, so the browser's automatic request for
-  // one logs a resource error that says nothing about the app. Answer it here
-  // rather than teaching every caller to tolerate that message.
-  void page.route("**/favicon.ico", (route) => route.fulfill({ status: 204, body: "" }));
-
   page.on("console", (message) => {
     if (message.type() === "error") {
       errors.push(message.text());
