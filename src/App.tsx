@@ -2111,7 +2111,10 @@ function ledgerSectionSubtotals(records: LocalLedgerRecord[]): string {
     totals.set(record.currency, (totals.get(record.currency) ?? 0) + amount);
   }
   return [...totals.entries()]
-    .map(([currency, total]) => formatAccountBalance(total, currency))
+    // Glue each code to its amount with a non-breaking space. The summary wraps
+    // once a section holds several currencies, and a normal space lets the
+    // break land inside a total, leaving "JPY" stranded above its own number.
+    .map(([currency, total]) => formatAccountBalance(total, currency).replace(" ", "\u00A0"))
     .join(" · ");
 }
 

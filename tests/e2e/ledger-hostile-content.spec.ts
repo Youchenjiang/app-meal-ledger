@@ -165,9 +165,17 @@ test("shows every currency total in the section summary at any supported width",
     // whole currencies, so it wraps instead, and no width may clip it.
     await expectNoClippedText(page, ROW_CONTAINER_SELECTOR, [SECTION_SUMMARY_SELECTOR], label);
 
-    const summary = (await page.locator(SECTION_SUMMARY_SELECTOR).first().textContent()) ?? "";
+    const raw = (await page.locator(SECTION_SUMMARY_SELECTOR).first().textContent()) ?? "";
+    // The summary glues each currency code to its amount with a non-breaking
+    // space, so a wrapped summary cannot strand "JPY" on the line above the
+    // number it belongs to. Both forms are asserted: the readable one, and the
+    // gluing that keeps it readable once the line breaks.
+    const summary = raw.replaceAll("\u00A0", " ");
     for (const total of EXPECTED_TOTALS) {
       expect(summary, `${label}: the summary should still show ${total}`).toContain(total);
+      expect(raw, `${label}: ${total} must not be breakable across lines`).toContain(
+        total.replace(" ", "\u00A0"),
+      );
     }
 
     // Guards the coupling behind the original defect: a summary that cannot
