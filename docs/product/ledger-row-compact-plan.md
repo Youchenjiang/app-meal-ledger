@@ -43,6 +43,23 @@
 
 單行緊湊列：`min-height: 26px` + 上下 3px padding（實測單行 39px/列，含日期與金額欄），`draft-list` gap 收斂；相對舊兩行卡片列（約 78px/列）**約縮減一半**。>440px 維持一行；≤440px 的窄螢幕走三行 fallback（56px/列），換取帳戶·類別完整可讀。320px 無水平溢出、名稱與帳戶·類別皆完整可見（e2e 驗證，含「meta 未被 ellipsis 截斷」的斷言）。
 
+### 3.2 敵意內容與極窄容器（回歸測試）
+
+`tests/e2e/ledger-hostile-content.spec.ts` 用「使用者真的打得出來的最寬資料」重跑同一輪寬度掃描：21 字 CJK 帳戶名、36 字拉丁帳戶名、三種幣別（TWD / USD / JPY，含小數），加上超長商家與品項。斷言按「長度是否有界」分三類：
+
+- **有界**（日期、狀態徽章、金額）：任何寬度都不得被 ellipsis 截斷——這三個值一定放得下，被截就是缺陷。
+- **無界**（品項、商家）：可截斷，但至少保留 40px。
+- **帳戶 · 類別**：可截斷，但至少保留 56px（約 8 個中文字）——這是這一列存在的理由，不能縮成 `Da…`。
+
+**支援下限＝容器內容寬 240px**（320px 手機留給明細區的寬度）；220/200px 仍測「較弱的契約」：有界值完整、列不超出版面，也就是退化時是「讓帳戶·類別少拿寬度」而不是「丟掉一個欄位」。
+
+本輪實測並修掉兩個缺陷：
+
+1. **分區摘要不能換行（多幣別受害最重）**：`.ledger-section-heading > span` 原本 `white-space: nowrap` + ellipsis，於是 ① 同區多幣別時整種幣別的小計被省略號吃掉；② 它的 min-content 變成分區唯一 grid column 的 min-content，把**每一列**一起推出卡片外（實測：240px 卡片裡列寬 268px，三幣別時 361px）。改為換行——只在分隔符斷行、貨幣代碼與金額不分離——換行後摘要靠右。
+2. **金額欄拒絕小數（`<input type="number" step="1">`）**：瀏覽器原生驗證會以 `stepMismatch` 擋下所有帶小數的金額，而原生驗證發生在 submit **之前**，所以表單根本沒送出、畫面也沒有任何訊息——`USD 98,765.43` 存不進去，TWD/JPY 因零小數而看不出來。改為 `step="any"`（精度仍由 app 自己的 `currencyPrecision` 把關）；`createExpenseRow` 現在斷言列數必須增加，這類「靜默沒存到」會讓測試直接紅。
+
+驗證：兩個 layout spec 共 6 tests 在本機 Chromium 實跑全綠（含既有 3 顆像素快照）；`tsc -b`、453 單元測試、`test:docs` 全綠。上述兩個缺陷另用「注入舊 CSS／舊 step」的臨時 spec 反向驗證守衛真的會紅（該臨時 spec 跑完即刪）。
+
 ## 4. 中長期（未實作）
 
 月份／期間範圍篩選、金額區間、多選（faceted）篩選與游標分頁（產品需求 long-ledger performance）。篩選狀態目前為頁面內 state，離開頁面即重置；若要跨頁面保留可之後改存 localStorage。
@@ -63,4 +80,4 @@
 
 ## 7. 驗證
 
-`npm run typecheck`、`npm test`、`npm run build`、`npm run test:e2e`；窄螢幕（320/390px）無水平溢出、明細列不高於兩行。
+`npm run typecheck`、`npm test`、`npm run build`、`npm run test:e2e`；窄螢幕（320/390px）無水平溢出、明細列不高於兩行。版面細節另見 [視覺回歸](../testing/visual-regression.md)：`tests/e2e/ledger-layout.spec.ts`（容器寬度掃描＋像素快照）與 `tests/e2e/ledger-hostile-content.spec.ts`（敵意內容與極窄容器）。

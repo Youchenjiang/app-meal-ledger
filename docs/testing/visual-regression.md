@@ -56,6 +56,55 @@ Field priority is asserted, not assumed: with a deliberately long merchant and
 item name, the spec requires the merchant to be ellipsised while account ·
 category still render in full. The title gives way first by design.
 
+## Hostile content, not a tidy seed
+
+`tests/e2e/ledger-hostile-content.spec.ts` repeats the sweep with the widest
+values a user can actually enter, because a row that survives `香蕉 / 全聯` says
+nothing about one holding `緊急預備金與長期投資專用帳戶不可隨意動用`:
+
+- a 21-character CJK account name, a 36-character latin name, and a third
+  account in a second currency;
+- three records whose totals are `TWD 1,234,567`, `USD 98,765.43`, and
+  `JPY 12,345,678` — one per currency, with the decimal amount on the currency
+  that has cents;
+- merchant and item names long enough to need the full width of a wide row.
+
+Fields are split by whether their length is bounded, and each class gets the
+weaker guarantee it can actually keep:
+
+| Class | Fields | Guarantee |
+| --- | --- | --- |
+| Bounded | `.record-date`, `.record-status`, `.record-amount strong` | never ellipsised, at any width |
+| Unbounded | `.record-item`, `.record-merchant` | may be ellipsised; must keep ≥ 40px |
+| Unbounded, but what the row is for | `.record-detail-line` | may be ellipsised; must keep ≥ 56px (about eight CJK characters) |
+
+The distinction is the point. A date and a currency total always fit, so an
+ellipsis on one is a defect at every width; an account name has no maximum
+length, so the honest guarantee is that it is shortened rather than reduced to
+the `Da…` stub the original defect produced.
+
+**The supported floor is 240px of container content width** — the room a 320px
+phone (the narrowest viewport the app targets) leaves the ledger section. At and
+above it every guarantee above holds. Below it the sweep still runs at 220px and
+200px and asserts the weaker contract: the bounded values stay whole and no row
+is wider than its card. The row degrades by giving the account · category line
+less room, not by dropping a field.
+
+### The summary wraps, and that is load-bearing
+
+The section heading (`.ledger-section-heading`) carries `1 筆 · 小計 TWD …` and,
+with several currencies in one section, one total per currency. It used to be
+`white-space: nowrap` with `text-overflow: ellipsis`, which failed twice at once:
+it hid whole currencies in an ellipsis, and its min-content width became the
+min-content of the section's only grid column — so the heading dragged every row
+out of the card at narrow widths (measured: rows 268px wide inside a 240px card
+with two currencies, 361px with three). It now wraps, breaking at separators and
+never inside a currency total.
+
+Both halves are asserted, because fixing either one alone leaves the other
+broken: the summary must render every currency total in full, *and* the rows must
+stay inside the card while it does.
+
 ## Layer 2 — pixel snapshots (baselines)
 
 The same spec writes `toHaveScreenshot` baselines for the row at three container
@@ -84,25 +133,44 @@ spacing, borders, colour, icon size — at the cost of being platform specific.
 
 ## Does the guard actually fire?
 
-Don't take it on faith. Reintroduce the defect without touching the source:
+Don't take it on faith. Reintroduce a defect without touching the source and
+watch the guard fail:
 
-```sh
-# in a scratch spec, after seeding a row
+```ts
+// the 24px track the account · category line got before its fix
 await page.addStyleTag({ content:
   ".ledger-record-card { grid-template-columns: auto minmax(0, 1fr) 24px auto auto auto !important; }" });
 await expect(expectNoClippedText(page, ROW_SELECTOR, [".record-detail-line"], "injected"))
   .rejects.toThrow(/record-detail-line renders ellipsised/);
+
+// the nowrap summary, restored exactly (the parent has to go back too)
+await page.addStyleTag({ content:
+  ".ledger-section-heading { flex-wrap: nowrap !important; }\n" +
+  ".ledger-section-heading > span { white-space: nowrap !important; overflow: hidden !important;" +
+  " text-overflow: ellipsis !important; margin-left: 0 !important; }" });
+// rows now measure 268px inside a 260px card, so this fails:
+expect(row.width).toBeLessThanOrEqual(containerContentWidth + 1);
+
+// the amount restriction that made every decimal save a silent no-op
+await page.evaluate(() => document.querySelector<HTMLInputElement>("#entry-amount")!.setAttribute("step", "1"));
+await page.getByRole("button", { name: "儲存記錄" }).click();
+// no row is created and no draft is stored:
+await expect(page.locator(ROW_SELECTOR)).toHaveCount(0);
 ```
 
-24px is the track the account · category line actually got before the fix. That
-check passed when this document was written, which is the evidence that the
-sweep fails on the original defect rather than merely describing it.
+All three were run against this document's revision and did fail as written. The
+third one is why `createExpenseRow` asserts the row count instead of trusting the
+save: a `type="number"` input with `step="1"` makes the browser reject every
+amount with a fractional part, and because native validation runs before the
+submit handler, the app saw nothing to report — `USD 98,765.43` could not be
+saved at all, and a spec that only checked "the form is on screen" would have
+passed.
 
 ## Running it
 
 | Situation | Command |
 | --- | --- |
-| Layout sweep and snapshots only | `npx playwright test tests/e2e/ledger-layout.spec.ts` |
+| Layout sweep, hostile content, and snapshots | `npx playwright test tests/e2e/ledger-layout.spec.ts tests/e2e/ledger-hostile-content.spec.ts` |
 | Whole end-to-end suite | `npm run test:e2e` |
 | Refresh pixel baselines | `npx playwright test tests/e2e/ledger-layout.spec.ts --update-snapshots` |
 
