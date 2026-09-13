@@ -99,7 +99,9 @@ it hid whole currencies in an ellipsis, and its min-content width became the
 min-content of the section's only grid column — so the heading dragged every row
 out of the card at narrow widths (measured: rows 268px wide inside a 240px card
 with two currencies, 361px with three). It now wraps, breaking at separators and
-never inside a currency total.
+never inside a currency total: the code and its amount are joined with a
+non-breaking space, because a plain space still let the break land inside a
+total and strand `JPY` on the line above its own number.
 
 Both halves are asserted, because fixing either one alone leaves the other
 broken: the summary must render every currency total in full, *and* the rows must
