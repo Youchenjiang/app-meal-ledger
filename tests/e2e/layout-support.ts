@@ -8,6 +8,11 @@ import { expect, type Locator, type Page } from "@playwright/test";
 export function collectBrowserErrors(page: Page): string[] {
   const errors: string[] = [];
 
+  // The dev server serves no favicon, so the browser's automatic request for
+  // one logs a resource error that says nothing about the app. Answer it here
+  // rather than teaching every caller to tolerate that message.
+  void page.route("**/favicon.ico", (route) => route.fulfill({ status: 204, body: "" }));
+
   page.on("console", (message) => {
     if (message.type() === "error") {
       errors.push(message.text());
@@ -23,7 +28,13 @@ export async function openWorkspace(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
 }
 
-export async function addAccount(page: Page, name: string): Promise<void> {
+/**
+ * Adds an account on the settings page. `currency` is optional so callers that
+ * only need one TWD account stay one line long; the currency select is matched
+ * through its wrapping label because a wrapping label's text includes its own
+ * option text, which makes getByLabel ambiguous.
+ */
+export async function addAccount(page: Page, name: string, currency?: string): Promise<void> {
   await page.getByRole("button", { name: "設定", exact: true }).click();
   // The settings page is one scrollable page in the committed layout and a tab
   // strip in the working tree; click the tab only when it is there so this seed
@@ -32,8 +43,18 @@ export async function addAccount(page: Page, name: string): Promise<void> {
   if ((await preferencesTab.count()) > 0) {
     await preferencesTab.click();
   }
-  await page.getByLabel("帳戶名稱").fill(name);
-  await page.getByRole("button", { name: "新增帳戶" }).click();
+  // Once an account exists the form sits behind a toggle button that carries
+  // the same accessible name as the form's submit button, so open it only when
+  // the field is missing and submit with the last match.
+  const nameInput = page.getByLabel("帳戶名稱");
+  if ((await nameInput.count()) === 0) {
+    await page.getByRole("button", { name: "新增帳戶" }).first().click();
+  }
+  await nameInput.fill(name);
+  if (currency) {
+    await page.locator('label:has(span:text-is("幣別")) select').selectOption(currency);
+  }
+  await page.getByRole("button", { name: "新增帳戶" }).last().click();
   await expect(page.getByLabel("可用帳戶")).toContainText(name);
 }
 
@@ -47,6 +68,7 @@ export type ExpenseRowFields = {
 
 /** Creates one confirmed expense through the UI and lands on the ledger page. */
 export async function createExpenseRow(page: Page, fields: ExpenseRowFields): Promise<void> {
+  const rowsBefore = await page.locator(ROW_SELECTOR).count();
   await page.getByRole("button", { name: "專區" }).click();
   // The capture form has no date field: a new expense is dated today. Callers
   // that need a stable picture mask the date rather than trying to pin it.
@@ -58,10 +80,76 @@ export async function createExpenseRow(page: Page, fields: ExpenseRowFields): Pr
   await page.getByRole("button", { name: "儲存記錄" }).click();
   await page.getByRole("button", { name: "開啟明細" }).click();
   await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  // The save is a no-op when a native constraint fails (the amount field used
+  // to reject every decimal amount with a step error the app never saw), and
+  // that failure shows no message on this page — so assert the row landed
+  // instead of letting a silently dropped record make the caller vacuous.
+  await expect(
+    page.locator(ROW_SELECTOR),
+    "saving a complete record should add a confirmed ledger row",
+  ).toHaveCount(rowsBefore + 1);
 }
 
 export const ROW_SELECTOR = ".ledger-record-card";
 export const ROW_CONTAINER_SELECTOR = ".ledger-kind-section";
+export const SECTION_SUMMARY_SELECTOR = ".ledger-section-heading > span";
+
+export type RowMeasurement = {
+  /** Whole row text, so a failure can name the record that misbehaved. */
+  text: string;
+  /** Border-box width of the row. */
+  width: number;
+  /** Width of the account \u00b7 category line. */
+  detailWidth: number;
+  detailText: string;
+  /** True when that line is ellipsised rather than fully rendered. */
+  detailClipped: boolean;
+  columns: number;
+};
+
+/**
+ * Measures the rows against the container they live in. Both questions here are
+ * about the relationship, not about absolute pixels: rows must not spill out of
+ * their card, and the account \u00b7 category line must not be squeezed below the
+ * width at which it stops saying anything.
+ *
+ * `containerOverflow` matters because a row wider than its card does not clip
+ * the row: it spills, which the container's own scrollWidth reports.
+ */
+export async function measureRows(
+  page: Page,
+): Promise<{ containerContentWidth: number; containerOverflow: number; rows: RowMeasurement[] }> {
+  return page.evaluate(
+    ({ rowSel, containerSel }) => {
+      const container = document.querySelector<HTMLElement>(containerSel);
+      if (!container) throw new Error(`No ${containerSel} container found on the ledger page.`);
+      const styles = getComputedStyle(container);
+      const chrome =
+        Number.parseFloat(styles.paddingLeft) +
+        Number.parseFloat(styles.paddingRight) +
+        Number.parseFloat(styles.borderLeftWidth) +
+        Number.parseFloat(styles.borderRightWidth);
+      return {
+        containerContentWidth: Math.round(container.getBoundingClientRect().width - chrome),
+        containerOverflow: Math.max(0, container.scrollWidth - container.clientWidth),
+        rows: Array.from(document.querySelectorAll<HTMLElement>(`${containerSel} ${rowSel}`)).map((row) => {
+          const detail = row.querySelector<HTMLElement>(".record-detail-line");
+          const detailWidth = detail ? Math.round(detail.getBoundingClientRect().width) : 0;
+          return {
+            text: (row.textContent ?? "").trim(),
+            width: Math.round(row.getBoundingClientRect().width),
+            detailWidth,
+            detailText: (detail?.textContent ?? "").trim(),
+            detailClipped: detail ? detail.scrollWidth > detailWidth + 1 : false,
+            columns: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+          };
+        }),
+      };
+    },
+    { rowSel: ROW_SELECTOR, containerSel: ROW_CONTAINER_SELECTOR },
+  );
+}
+
 
 /**
  * Sets the width of the container that holds the ledger rows. The row sizes
