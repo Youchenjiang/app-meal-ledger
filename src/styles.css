@@ -2325,6 +2325,13 @@ h2 {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  /* The summary wraps instead of clipping: it carries one total per currency,
+     and an ellipsised summary drops whole currencies rather than shortening
+     them. Wrapping also keeps its min-content width small — a nowrap summary
+     used to set the min-content of the section's only grid column, which
+     pushed every row out of the card on narrow containers. */
+  flex-wrap: wrap;
+  row-gap: 2px;
 }
 
 .ledger-section-heading h3 {
@@ -2334,9 +2341,13 @@ h2 {
 
 .ledger-section-heading > span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Break at separators, never inside a word unless a single one cannot fit;
+     currency codes and totals stay whole. */
+  overflow-wrap: break-word;
+  white-space: normal;
+  /* Right-aligned on its own line once the heading wraps. */
+  margin-left: auto;
+  text-align: right;
   color: var(--amber);
   font-size: 12px;
   font-weight: 700;
