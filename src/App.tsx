@@ -3124,7 +3124,11 @@ function AmountField({
           required={required}
           inputMode="decimal"
           min={allowNegative ? undefined : "0"}
-          step="1"
+          // "any" and not "1": the browser's step check would reject every
+          // decimal amount (a USD 98,765.43 expense), and because native
+          // validation runs before submit, the form would silently do nothing.
+          // Amount precision is the app's own rule (currencyPrecision).
+          step="any"
           type="number"
           value={value}
           onChange={(event) => onChange(event.target.value)}
