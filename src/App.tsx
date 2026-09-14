@@ -2359,15 +2359,23 @@ function LedgerRecordActions({ isVoided, onEdit, onDelete, deleteAction }: Reado
 function LedgerRecordCard({ record, onEdit, onDelete, deleteAction }: Readonly<LedgerRecordCardProps>) {
   const isVoided = record.recordState === "voided";
   const { t } = useI18n();
+  // The title, merchant, and account · category line can all be shortened by
+  // an ellipsis, and an ellipsis changes what is painted, not what exists: the
+  // full value goes in a title so a clipped account name is still readable
+  // instead of lost. The date carries the same affordance; the amount, the
+  // currency, and the actions are never shortened and need none.
+  const itemName = recordTitle(record);
+  const merchantName = record.counterparty || record.reason;
+  const metaLine = recordMetaLine(record);
   return (
     <article className={`draft-card ledger-record-card ${isVoided ? "voided-record" : ""}`}>
       <span className="record-date" title={record.localDate || record.periodStart || record.periodEnd || ""}>{recordShortDate(record)}</span>
       <span className="record-name">
-        <strong className="record-item">{recordTitle(record)}</strong>
-        {record.itemName && !record.itemNameMissing ? <span className="record-merchant">{record.counterparty || record.reason}</span> : null}
+        <strong className="record-item" title={itemName}>{itemName}</strong>
+        {record.itemName && !record.itemNameMissing ? <span className="record-merchant" title={merchantName}>{merchantName}</span> : null}
       </span>
       <span className="record-meta">
-        <span className="record-detail-line">{recordMetaLine(record)}</span>
+        <span className="record-detail-line" title={metaLine}>{metaLine}</span>
       </span>
       {record.status === "local-only" && !isVoided ? <em className="record-status">{t("ledger.localOnly")}</em> : null}
       <div className="draft-amount record-amount">

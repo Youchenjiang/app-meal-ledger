@@ -43,6 +43,11 @@ const SUPPORTED_WIDTHS = [900, 620, 440, 405, 404, 320, 260, 240];
 // values stay whole and nothing spills out of the card.
 const SUB_FLOOR_WIDTHS = [220, 200];
 
+// Fields the row is allowed to shorten. CSS ellipsis changes what is painted,
+// not what exists, so each one has to carry its full value somewhere the user
+// can reach — otherwise a clipped account name is simply lost.
+const TRUNCATABLE_FIELDS = [".record-item", ".record-merchant", ".record-detail-line"];
+
 const MIN_TRUNCATABLE_WIDTH = 40;
 // What the account · category line may be reduced to before it stops saying
 // anything: about eight CJK characters, or the tail of a long latin name.
@@ -76,6 +81,35 @@ const EXPECTED_TOTALS = ["TWD 1,234,567", "USD 98,765.43", "JPY 12,345,678"];
 
 const ROWS = [TWD_ROW, USD_ROW, JPY_ROW];
 
+/**
+ * Every shortened field must expose its full value in a title. The check is
+ * "the title is the untruncated text", which fails both when the title is
+ * missing and when it was filled with a shortened copy.
+ */
+async function expectTruncatedTextIsReachable(page: Page, label: string): Promise<void> {
+  const unreachable = await page.locator(ROW_SELECTOR).evaluateAll(
+    (rows, selectors) =>
+      rows.flatMap((row) =>
+        selectors.flatMap((selector) => {
+          const element = row.querySelector<HTMLElement>(selector);
+          if (!element) return [];
+          const text = (element.textContent ?? "").trim();
+          if (!text) return [];
+          const title = element.getAttribute("title") ?? "";
+          if (title === text) return [];
+          const clipped =
+            element.scrollWidth > Math.ceil(element.getBoundingClientRect().width) + 1;
+          return [
+            `${selector}${clipped ? " (clipped)" : ""}: title ${JSON.stringify(title)} does not expose ${JSON.stringify(text)}`,
+          ];
+        }),
+      ),
+    TRUNCATABLE_FIELDS,
+  );
+
+  expect(unreachable, `${label}: a shortened field must still be readable in full`).toEqual([]);
+}
+
 async function seedHostileLedger(page: Page): Promise<void> {
   await openWorkspace(page);
   await addAccount(page, LONG_CJK_ACCOUNT, "TWD");
@@ -102,6 +136,7 @@ test("keeps every bounded value whole when the ledger holds hostile content", as
     for (const selector of MAY_TRUNCATE) {
       await expectReadableWidth(page, ROW_SELECTOR, selector, MIN_TRUNCATABLE_WIDTH, label);
     }
+    await expectTruncatedTextIsReachable(page, label);
 
     const { containerContentWidth, containerOverflow, rows } = await measureRows(page);
     expect(rows, `${label}: every seeded record should be listed`).toHaveLength(ROWS.length);

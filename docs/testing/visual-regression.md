@@ -90,6 +90,24 @@ above it every guarantee above holds. Below it the sweep still runs at 220px and
 is wider than its card. The row degrades by giving the account · category line
 less room, not by dropping a field.
 
+### A shortened value stays reachable
+
+An ellipsis changes what is painted, not what exists, so every field the row may
+shorten carries its full value in a `title`: the item, the merchant, and the
+account · category line (the date already did, and the amount, the currency, and
+the actions are never shortened). The sweep asserts the title *equals* the
+untruncated text, which fails both when the title is missing and when someone
+fills it with the already-shortened copy. Until this check existed the row had no
+title on those three fields at all, so a clipped account name was simply lost.
+
+Limits worth knowing: a `title` is a hover affordance. Keyboard and touch users
+reach the full values through the edit dialog (the row's pencil action opens it
+with every field labelled), but there is no per-field expand affordance yet. The
+pending content-UI restructure plan — still uncommitted, so it is named rather
+than linked — is the place to settle that (§5.3 and §7), because it also moves
+the row to 44px touch targets and a larger type floor, both of which these
+expectations will follow.
+
 ### The summary wraps, and that is load-bearing
 
 The section heading (`.ledger-section-heading`) carries `1 筆 · 小計 TWD …` and,
