@@ -597,7 +597,9 @@ describe("App shell draft flow", () => {
 
     await user.click(screen.getByRole("button", { name: "編輯" }));
     await user.click(screen.getByRole("button", { name: "補齊細節" }));
-    const editor = screen.getByRole("form", { name: "補齊 unresolved-expense" });
+    // The dialog is named after the record's translated kind, not the raw enum:
+    // "unresolved-expense" was leaking into a user-facing name.
+    const editor = screen.getByRole("form", { name: "補齊 缺漏支出" });
     await user.clear(within(editor).getByLabelText("日期"));
     await user.type(within(editor).getByLabelText("日期"), "2026-07-12");
     await user.type(within(editor).getByLabelText("類別"), "日用");

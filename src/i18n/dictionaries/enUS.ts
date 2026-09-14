@@ -34,6 +34,9 @@ export const enUS: Record<string, string> = {
   "app.metaDefault": "{account} · {category}",
   "app.metaTransfer": "{account} → {target}",
   "app.metaFundAddition": "{account} · {reason}",
+  // A transfer, with the accounts spelled out; the record row is titled with its
+  // kind instead, because its meta line already carries the same accounts.
+  "app.recordTransfer": "Transfer: {account} → {target}",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.confirm": "Confirm",

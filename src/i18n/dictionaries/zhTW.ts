@@ -35,6 +35,9 @@ export const zhTW: Record<string, string> = {
   "app.metaDefault": "{account} · {category}",
   "app.metaTransfer": "{account} → {target}",
   "app.metaFundAddition": "{account} · {reason}",
+  // A transfer, with the accounts spelled out. The record row is titled with
+  // its kind instead, because its meta line already carries the same accounts.
+  "app.recordTransfer": "轉帳:{account} → {target}",
   "common.cancel": "取消",
   "common.close": "關閉",
   "common.confirm": "確認",

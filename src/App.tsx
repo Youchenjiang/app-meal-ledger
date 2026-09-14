@@ -153,9 +153,12 @@ function exportStageMessage(stage: "preparing" | "building" | "complete"): strin
 }
 
 function duplicateCandidateName(duplicate: ImportDuplicate): string {
+  // "Row 3", the same string the review list already uses for a row number:
+  // this used to ask for a second key with the same meaning, which no
+  // dictionary defined.
   return duplicate.candidateType === "existing-record"
     ? duplicate.candidateId
-    : t("draft.duplicateCandidateRow", { row: duplicate.candidateRowNumber ?? 0 });
+    : t("draft.rowNumber", { row: duplicate.candidateRowNumber ?? 0 });
 }
 
 function duplicateCandidateLabel(duplicate: ImportDuplicate): string {
@@ -430,18 +433,28 @@ function createEmptyDraftForm(): DraftForm {
   };
 }
 
+// A transfer has no counterparty, so it is named by what it is and the two
+// accounts stay in the secondary line the card already renders ("… · 轉到 X").
 function draftDisplayName(draft: TransactionDraft): string {
-  return draft.kind === "transfer" ? t("app.transferTo", { account: draft.account, target: draft.transferAccount }) : draft.counterparty;
+  return draft.kind === "transfer" ? kindLabel(draft.kind) : draft.counterparty;
 }
 
+// Dialogue titles and aria labels use this, where a name is all the context the
+// user gets: a transfer spells out both accounts, and a record with no
+// counterparty of its own falls back to its translated kind. The kind used to
+// be interpolated raw, so an expense with nothing filled in was titled
+// "unresolved-expense" on screen.
 function recordDisplayName(record: LocalLedgerRecord): string {
-  return record.kind === "transfer" ? t("app.recordTransfer", { account: record.accountName, target: record.transferAccountName || t("common.destination") }) : record.counterparty || record.reason || record.kind;
+  return record.kind === "transfer" ? t("app.recordTransfer", { account: record.accountName, target: record.transferAccountName || t("common.destination") }) : record.counterparty || record.reason || kindLabel(record.kind);
 }
 
 // The row title leads with the purchased item (品項) when one exists; the
-// merchant/source stays visible as the second line of the name cell.
+// merchant/source stays visible as the second line of the name cell. A transfer
+// is titled by its kind, because its accounts are already the meta line below —
+// spelling them out in both places is the duplication the row was meant to lose.
 function recordTitle(record: LocalLedgerRecord): string {
   if (record.itemName && !record.itemNameMissing) return record.itemName;
+  if (record.kind === "transfer") return kindLabel(record.kind);
   return recordDisplayName(record);
 }
 
