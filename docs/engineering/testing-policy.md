@@ -38,6 +38,7 @@ and do not restate the mapping.
 | Media / privacy / R2 | Ownership, retention, and export-exclusion checks; signed upload URLs never expose R2 secrets |
 | Sync / offline | Idempotency, conflict, and no-silent-overwrite checks (see `pr-review-checklist.md`) |
 | UI shell / frontend | `npm run build` plus the browser smoke test (checklist in `development-workflow.md`) and a console-error check |
+| User-facing text / i18n keys | Both dictionaries define every key `src/` uses: `src/i18n/dictionaries.test.ts` scans the call sites and names each missing key. A key that resolves to `[missing:key]` in dev, or to the bare key in a build, is a defect rather than a fallback |
 | Ledger row layout / narrow containers | Container-width layout sweep in `tests/e2e/ledger-layout.spec.ts`, and the same sweep with long names / three currencies / extreme widths in `tests/e2e/ledger-hostile-content.spec.ts`; see [Visual Regression for Layout](../testing/visual-regression.md) |
 | Docs-only | Link check or reviewer walkthrough |
 
