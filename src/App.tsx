@@ -2577,18 +2577,15 @@ function LedgerRecordsView({
 
   return (
     <>
-      <section className="content-grid">
-        <Panel title={t("ledger.confirmedPanel")} eyebrow={t("ledger.confirmedEyebrow")}>
+      <header className="ledger-toolbar">
+        <h2>{t("ledger.confirmedPanel")} <span>{ledgerEntries.length}</span></h2>
+        {ledgerEntries.length > 0 ? (
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
+            <Plus size={18} aria-hidden="true" />
             {t("ledger.startRecord")}
           </button>
-        </Panel>
-        <Panel title={draftCount > 0 ? t("ledger.pendingPanel") : t("ledger.queuePanel")} eyebrow={t("ledger.nextStep")}>
-          <p className="panel-copy">
-            {draftCount > 0 ? draftReviewCopy(draftCount) : t("draft.noPendingQueue")}
-          </p>
-        </Panel>
-      </section>
+        ) : null}
+      </header>
       {ledgerEntries.length > 0 ? (
         <section className="ledger-history" aria-label={t("draft.confirmedListAria")}>
           <div className="draft-list-heading">
@@ -2657,7 +2654,7 @@ function LedgerRecordsView({
         </section>
       ) : null}
       {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
-      {ledgerEntries.length === 0 ? <p className="table-empty">{t("draft.emptyConfirmed")}</p> : null}
+      {ledgerEntries.length === 0 ? <section className="workspace-empty"><ReceiptText size={32} aria-hidden="true" /><p>{t("draft.emptyConfirmed")}</p><button className="primary-action" type="button" onClick={() => navigate(navItemFor("capture"))}><Plus size={18} aria-hidden="true" />{t("ledger.startRecord")}</button></section> : null}
     </>
   );
 }

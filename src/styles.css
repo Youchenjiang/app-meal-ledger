@@ -1489,7 +1489,7 @@ h2 {
 
 .capture-intent-picker {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -3724,7 +3724,7 @@ button.action-card.unavailable {
 
 /* 中央主區 */
 .mode-b-stage {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -3769,7 +3769,10 @@ button.action-card.unavailable {
 
 .mode-b-ring {
   position: absolute;
-  inset: 4px;
+  top: 10px;
+  left: calc(50% - 54px);
+  width: 108px;
+  height: 108px;
   border: 2px solid var(--brand-focus);
   border-radius: 50%;
   pointer-events: none;
