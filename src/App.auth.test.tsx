@@ -42,7 +42,13 @@ async function openAccountPage(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "設定" }));
 }
 
-describe("app auth boundary", () => {
+// renderRemoteApp() resets the module registry and re-imports the whole App
+// graph, so the first test in this file spends its budget on module evaluation
+// before it can assert anything. That cost tracks the size of the app and had
+// grown past the default 5s budget, which reported a slow cold start as a
+// failing assertion. The budget is raised for this file rather than globally,
+// so a genuinely hung render elsewhere still fails on the default.
+describe("app auth boundary", { timeout: 20_000 }, () => {
   beforeEach(() => {
     vi.stubGlobal("scrollTo", vi.fn());
     vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "local-id") });
