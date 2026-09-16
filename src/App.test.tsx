@@ -80,19 +80,18 @@ describe("App shell draft flow", () => {
     window.history.pushState(null, "", "/");
   });
 
-  test("opens first-account setup from Settings when requested", async () => {
+  test("opens first-account setup from the overview empty state", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("button", { name: "開啟首次帳戶設定" }));
+    await user.click(screen.getByRole("button", { name: "建立帳戶" }));
     expect(screen.getByRole("heading", { name: "建立你的第一個帳戶" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("帳戶名稱"), "Travel wallet");
     await user.click(screen.getByRole("button", { name: "建立帳戶" }));
     await user.click(screen.getByRole("button", { name: "概覽" }));
 
     expect(await screen.findByRole("heading", { name: "概覽" })).toBeInTheDocument();
-    expect(screen.getByText("1 個帳戶")).toBeInTheDocument();
+    expect(screen.getAllByText("Travel wallet").length).toBeGreaterThan(0);
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.custom-categories") ?? "[]")).toEqual(expect.arrayContaining(["飲食", "AI"]));
     expect(JSON.parse(window.localStorage.getItem("mealledger.taxonomy.tags") ?? "[]")).toEqual(expect.arrayContaining(["訂閱"]));
   });
@@ -164,7 +163,7 @@ describe("App shell draft flow", () => {
 
     await user.click(screen.getByRole("button", { name: "概覽" }));
     const reports = screen.getByLabelText("帳戶報表");
-    const bankRow = within(reports).getByText("Bank account").closest(".report-row");
+    const bankRow = within(reports).getByText("Bank account").closest(".account-overview-row");
     expect(bankRow?.textContent).toMatch(/期初餘額/);
     expect(bankRow?.textContent).toMatch(/TWD 2,500/);
   });
@@ -188,8 +187,8 @@ describe("App shell draft flow", () => {
     expect(screen.queryByText("No confirmed ledger records yet.")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "概覽" }));
-    expect(screen.getByText("1 個帳戶")).toBeInTheDocument();
-    expect(screen.getByText("Daily wallet: TWD -417")).toBeInTheDocument();
+    expect(screen.getAllByText("Daily wallet").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("TWD -417").length).toBeGreaterThan(0);
   });
 
   test("switches between all capture intents without creating a ledger record", async () => {

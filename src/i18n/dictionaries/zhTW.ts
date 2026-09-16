@@ -209,15 +209,15 @@ export const zhTW: Record<string, string> = {
   "overview.syncAlerts": "同步提醒",
   "overview.needsAction": "需要處理",
   "overview.cloudSyncIssues": "雲端同步問題",
-  "overview.accountReports": "帳戶報表",
   "overview.accountingView": "會計檢視",
-  "overview.accountReportsEmpty": "建立帳戶後,可分別查看收入、支出、退款、轉帳與調整。",
   "overview.accountReportsAria": "帳戶報表",
+  "overview.accountAndCurrency": "帳戶／幣別",
   "overview.balance": "餘額",
   "overview.openingBalance": "期初餘額",
   "overview.netSpending": "淨支出",
   "overview.cashFlow": "現金流",
   "overview.recordCount": "{count} 筆記錄",
+  "overview.noRecords": "這些帳戶還沒有交易。",
 
   // --- ledger page ---
   "ledger.confirmedPanel": "明細記錄",

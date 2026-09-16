@@ -208,15 +208,15 @@ export const enUS: Record<string, string> = {
   "overview.syncAlerts": "Sync alerts",
   "overview.needsAction": "Needs attention",
   "overview.cloudSyncIssues": "Cloud sync issues",
-  "overview.accountReports": "Account reports",
   "overview.accountingView": "Accounting view",
-  "overview.accountReportsEmpty": "Once accounts exist, view income, expenses, refunds, transfers, and adjustments per account.",
   "overview.accountReportsAria": "Account reports",
+  "overview.accountAndCurrency": "Account / currency",
   "overview.balance": "Balance",
   "overview.openingBalance": "Opening balance",
   "overview.netSpending": "Net spending",
   "overview.cashFlow": "Cash flow",
   "overview.recordCount": "{count} records",
+  "overview.noRecords": "These accounts have no transactions yet.",
 
   // --- ledger page ---
   "ledger.confirmedPanel": "Ledger records",

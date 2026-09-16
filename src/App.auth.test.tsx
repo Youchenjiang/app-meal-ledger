@@ -65,7 +65,7 @@ describe("app auth boundary", { timeout: 20_000 }, () => {
     await renderRemoteApp();
 
     expect(await screen.findByRole("heading", { name: "概覽" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "建立你的第一個帳戶" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("帳戶名稱")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /open workspace/i })).not.toBeInTheDocument();
   });
 

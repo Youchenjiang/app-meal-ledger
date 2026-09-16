@@ -1772,7 +1772,7 @@ function renderRoute({
 
   switch (route) {
     case "overview":
-      return <OverviewPage accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} />;
+      return <OverviewPage onCreateAccount={onReopenOnboarding} onCreateRecord={() => navigate(navItemFor("capture"))} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} />;
     case "ledger":
       return (
         <LedgerPage
@@ -1950,22 +1950,63 @@ function renderRoute({
   }
 }
 
-function OverviewPage({ accountBalances, accountReports, syncIssues, onRetrySyncItem }: Readonly<{
-  accountBalances: ReturnType<typeof calculateAccountBalances>;
+function OverviewPage({ onCreateAccount, onCreateRecord, accountReports, syncIssues, onRetrySyncItem }: Readonly<{
+  onCreateAccount: () => void;
+  onCreateRecord: () => void;
   accountReports: AccountReport[];
   syncIssues: CloudSyncQueueItem[];
   onRetrySyncItem: (id: string) => void;
 }>) {
   const { t } = useI18n();
-  const accountDetail = accountBalances.length === 0
-    ? t("overview.createAccountFirst")
-    : accountBalances.slice(0, 3).map((account) => `${account.name}: ${formatAccountBalance(account.balance, account.currency)}`).join(" · ");
+  const recordCount = accountReports.reduce((total, report) => total + report.recordCount, 0);
 
   return (
-    <div className="route-stack">
-      <section className="summary-grid">
-        <EmptyMetric label={t("overview.accountSummary")} value={accountBalances.length > 0 ? t("overview.accountCount", { count: accountBalances.length }) : t("status.noBalance")} detail={accountDetail} />
-      </section>
+    <div className="route-stack overview-page">
+      {accountReports.length === 0 ? (
+        <section className="workspace-empty">
+          <Banknote size={32} aria-hidden="true" />
+          <h2>{t("settings.onboardingTitle")}</h2>
+          <p>{t("overview.createAccountFirst")}</p>
+          <button className="primary-action" type="button" onClick={onCreateAccount}><Plus size={18} aria-hidden="true" />{t("settings.createAccount")}</button>
+        </section>
+      ) : (
+        // One surface per account. The balance summary and the per-account
+        // report used to be two stacked blocks, so each account name and
+        // balance was printed twice on the same screen. They are merged here,
+        // and every account renders the same four figures in the same order,
+        // so the numbers stay comparable straight down a column.
+        <section className="account-overview" aria-label={t("overview.accountReportsAria")}>
+          <div className="account-overview-head" aria-hidden="true">
+            <span>{t("overview.accountAndCurrency")}</span>
+            <span>{t("overview.balance")}</span>
+            <span>{t("overview.openingBalance")}</span>
+            <span>{t("overview.netSpending")}</span>
+            <span>{t("overview.cashFlow")}</span>
+          </div>
+          <div className="account-overview-list">
+            {accountReports.map((report) => (
+              <div className="account-overview-row" key={report.id}>
+                <div className="account-overview-identity">
+                  <strong>{report.name}</strong>
+                  <span>{report.currency} · {t("overview.recordCount", { count: report.recordCount })}</span>
+                </div>
+                <dl className="account-overview-metrics">
+                  <div><dt>{t("overview.balance")}</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
+                  <div><dt>{t("overview.openingBalance")}</dt><dd>{formatAccountBalance(report.fundAdditionTotal, report.currency)}</dd></div>
+                  <div><dt>{t("overview.netSpending")}</dt><dd>{formatAccountBalance(report.netSpendingTotal, report.currency)}</dd></div>
+                  <div><dt>{t("overview.cashFlow")}</dt><dd>{formatAccountBalance(report.cashFlowTotal, report.currency)}</dd></div>
+                </dl>
+              </div>
+            ))}
+          </div>
+          {recordCount === 0 ? (
+            <p className="account-overview-empty">
+              {t("overview.noRecords")}
+              <button className="text-action" type="button" onClick={onCreateRecord}>{t("ledger.startRecord")}</button>
+            </p>
+          ) : null}
+        </section>
+      )}
       {syncIssues.length > 0 ? (
         <Panel title={t("overview.syncAlerts")} eyebrow={t("overview.needsAction")}>
           <div className="sync-issues" aria-label={t("overview.cloudSyncIssues")}>
@@ -1989,28 +2030,6 @@ function OverviewPage({ accountBalances, accountReports, syncIssues, onRetrySync
           </div>
         </Panel>
       ) : null}
-      <Panel title={t("overview.accountReports")} eyebrow={t("overview.accountingView")}>
-        {accountReports.length === 0 ? (
-          <p className="panel-copy">{t("overview.accountReportsEmpty")}</p>
-        ) : (
-          <div className="report-list" aria-label={t("overview.accountReportsAria")}>
-            {accountReports.map((report) => (
-              <div className="report-row" key={report.id}>
-                <div>
-                  <strong>{report.name}</strong>
-                  <span>{report.currency} · {t("overview.recordCount", { count: report.recordCount })}</span>
-                </div>
-                <dl>
-                  <div><dt>{t("overview.balance")}</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
-                  {report.fundAdditionTotal !== 0 ? <div><dt>{t("overview.openingBalance")}</dt><dd>{formatAccountBalance(report.fundAdditionTotal, report.currency)}</dd></div> : null}
-                  <div><dt>{t("overview.netSpending")}</dt><dd>{formatAccountBalance(report.netSpendingTotal, report.currency)}</dd></div>
-                  <div><dt>{t("overview.cashFlow")}</dt><dd>{formatAccountBalance(report.cashFlowTotal, report.currency)}</dd></div>
-                </dl>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
     </div>
   );
 }
@@ -6106,16 +6125,6 @@ function Panel({ title, eyebrow, id, children }: Readonly<{ title: string; eyebr
         </div>
       </div>
       {children}
-    </article>
-  );
-}
-
-function EmptyMetric({ label, value, detail }: Readonly<{ label: string; value: string; detail: string }>) {
-  return (
-    <article className="summary-card">
-      <p>{label}</p>
-      <strong>{value}</strong>
-      <span>{detail}</span>
     </article>
   );
 }

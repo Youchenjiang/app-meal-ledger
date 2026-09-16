@@ -612,8 +612,6 @@ a {
 .brand-name,
 .brand-caption,
 .eyebrow,
-.summary-card p,
-.summary-card span,
 .panel-copy,
 .settings-list dt,
 .settings-list dd {
@@ -625,7 +623,6 @@ a {
 }
 
 .brand-caption,
-.summary-card span,
 .settings-list dd {
   color: var(--text-muted);
   font-size: 13px;
@@ -1023,16 +1020,6 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-surface);
-}
-
-.summary-card {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-}
-
-.summary-card strong {
-  font-size: 22px;
 }
 
 .content-grid {
@@ -1438,55 +1425,105 @@ h2 {
   align-self: start;
 }
 
-.report-list {
+/* One account per row, with the same four figures in the same order, so the
+   numbers are comparable straight down a column under the 帳戶／幣別 header. */
+.account-overview {
   display: grid;
-  gap: 10px;
+  min-width: 0;
 }
 
-.report-row {
+.account-overview-head,
+.account-overview-row {
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr);
-  gap: 18px;
-  align-items: center;
-  padding: 12px 0;
-  border-top: 1px solid var(--border-soft);
+  grid-template-columns: minmax(150px, 0.9fr) repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
 }
 
-.report-row:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.report-row > div:first-child {
-  display: grid;
-  gap: 4px;
-}
-
-.report-row > div:first-child span {
+.account-overview-head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 14px;
 }
 
-.report-row dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
+.account-overview-head span:not(:first-child) {
+  text-align: right;
 }
 
-.report-row dl div {
+.account-overview-list {
+  display: grid;
+  min-width: 0;
+}
+
+.account-overview-row {
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.account-overview-identity {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
-.report-row dt {
+.account-overview-identity strong {
+  overflow-wrap: anywhere;
+}
+
+.account-overview-identity span {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
-.report-row dd {
+.account-overview-metrics {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+}
+
+.account-overview-metrics div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-overview-metrics dd {
   margin: 0;
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* On desktop the column names come from the header row above, so each row
+   keeps its labels for assistive technology only instead of printing them
+   again next to every figure. */
+.account-overview-metrics dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.account-overview-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 0 0;
+  color: var(--text-muted);
 }
 
 .draft-summary {
@@ -3417,9 +3454,40 @@ button.action-card.unavailable {
     padding: 16px;
   }
 
-  .report-row {
-    grid-template-columns: 1fr;
+  /* Below this width five columns stop being readable, so each account becomes
+     one block: name and currency first, then the same four figures in a fixed
+     two-column grid. Nothing moves position because a figure happens to be 0. */
+  .account-overview-head {
+    display: none;
+  }
+
+  .account-overview-row {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+    padding: 16px 0;
+  }
+
+  .account-overview-metrics {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-overview-metrics div {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .account-overview-metrics dt {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    clip: auto;
+    clip-path: none;
+    overflow: visible;
+    white-space: normal;
+    color: var(--text-muted);
+    font-size: 14px;
   }
 
   .capture-start-heading {
@@ -3436,11 +3504,23 @@ button.action-card.unavailable {
   }
 
   .capture-intent-button:last-child {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 }
 
 @media (max-width: 560px) {
+  .settings-content .settings-preferences-block { grid-template-columns: 1fr; }
+  .settings-content .settings-preferences-block > fieldset { grid-column: 1; }
+  .settings-tabs {
+    gap: 2px;
+  }
+
+  .settings-tab {
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 13px;
+  }
+
   .settings-account-entry {
     align-items: stretch;
     flex-direction: column;
