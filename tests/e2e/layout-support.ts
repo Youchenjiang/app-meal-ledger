@@ -235,6 +235,22 @@ export async function expectNoClippedText(
   }
 }
 
+/**
+ * The font size a field actually renders at. A "keep at least N characters"
+ * floor has to be converted with this rather than with a pixel constant: the
+ * row's type scale moves, and a pixel floor silently comes to mean fewer
+ * characters every time it does.
+ */
+export async function fontSizeOf(page: Page, scope: string, selector: string): Promise<number> {
+  const size = await page
+    .locator(`${scope} ${selector}`)
+    .first()
+    .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+
+  expect(Number.isFinite(size), `${selector} should render at a readable font size`).toBe(true);
+  return size;
+}
+
 /** Asserts a may-truncate field is still given room, rather than collapsing. */
 export async function expectReadableWidth(
   page: Page,
@@ -250,4 +266,78 @@ export async function expectReadableWidth(
   for (const width of widths) {
     expect(width, `${label}: ${selector} collapsed to ${width}px`).toBeGreaterThan(minimum);
   }
+}
+
+export type TextProminence = {
+  selector: string;
+  text: string;
+  /** Computed colour, kept as the browser reports it so a failure is quotable. */
+  color: string;
+  fontSize: number;
+  fontWeight: number;
+  /** WCAG contrast ratio of that colour against the background it sits on. */
+  contrast: number;
+};
+
+/**
+ * Measures how loudly each part of the row speaks: its colour, size, weight, and
+ * the contrast that colour has against the surface the row is painted on.
+ *
+ * A geometry sweep is blind to this. The compact row painted its title with the
+ * muted colour — `.draft-card span` sets it and the title's `<strong>` inherited
+ * it — while the amount kept the page's brightest text, so the row's *least*
+ * important relationship was inverted and every clipping assertion still passed.
+ *
+ * The row paints no background of its own, so the backdrop is the nearest
+ * ancestor that actually does: the tier is judged against the surface a reader
+ * sees, not against a hardcoded token.
+ */
+export async function rowTextProminence(page: Page, selectors: string[]): Promise<TextProminence[]> {
+  return page.evaluate(
+    ({ rowSel, sels }) => {
+      const rgba = (value: string) => {
+        const parts = (value.match(/[\d.]+/g) ?? []).map(Number);
+        if (parts.length < 3) throw new Error(`Cannot read colour "${value}"`);
+        return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+      };
+      const luminance = ({ r, g, b }: { r: number; g: number; b: number }) => {
+        const channel = (value: number) => {
+          const v = value / 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+      };
+      const contrast = (a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }) => {
+        const first = luminance(a);
+        const second = luminance(b);
+        return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+      };
+      const backdrop = (element: Element) => {
+        for (let node: Element | null = element; node; node = node.parentElement) {
+          const { r, g, b, a } = rgba(getComputedStyle(node).backgroundColor);
+          if (a > 0.99) return { r, g, b };
+        }
+        return { r: 255, g: 255, b: 255 };
+      };
+
+      const row = document.querySelector<HTMLElement>(rowSel);
+      if (!row) throw new Error(`No ${rowSel} on the page to measure.`);
+      const background = backdrop(row);
+
+      return sels.map((selector) => {
+        const element = row.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`The row has no ${selector} to measure.`);
+        const styles = getComputedStyle(element);
+        return {
+          selector,
+          text: (element.textContent ?? "").trim(),
+          color: styles.color,
+          fontSize: Number.parseFloat(styles.fontSize),
+          fontWeight: Number(styles.fontWeight) || 400,
+          contrast: Math.round(contrast(rgba(styles.color), background) * 100) / 100,
+        };
+      });
+    },
+    { rowSel: ROW_SELECTOR, sels: selectors },
+  );
 }

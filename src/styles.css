@@ -2162,7 +2162,7 @@ h2 {
 
 .ledger-record-card .record-date {
   grid-area: date;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -2180,7 +2180,18 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  /* Body text, the row's own reading size. See the type scale note above the
+     layout tiers: the floor is what decides how much width the row needs. */
+  font-size: 16px;
+  /* The row's primary field, and the only text in it allowed the primary
+     colour: what was bought is what the row exists to say. This has to be
+     stated here — without it the title inherits the muted colour from
+     `.draft-card span`, which left the least important relationship in the row
+     inverted (dim title, brightest amount). */
+  color: var(--text-primary);
+  /* Explicit rather than the `<strong>` default, which is `bolder` and would
+     climb if an ancestor ever became bold. */
+  font-weight: 700;
 }
 
 .ledger-record-card .record-merchant {
@@ -2188,7 +2199,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--text-muted);
 }
@@ -2201,7 +2212,14 @@ h2 {
 
 .ledger-record-card .record-amount strong {
   white-space: nowrap;
-  font-size: 12px;
+  /* The number the row reports is body text, like the item it belongs to. */
+  font-size: 16px;
+  /* Positioned, not dominant. The amount is a number the user came to read, so
+     it keeps comfortable contrast — one tier below the item and clearly above
+     the date / merchant / account line, rather than the brightest text on the
+     page as it was when the title was muted. */
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .ledger-record-card .record-meta {
@@ -2217,7 +2235,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
 }
 
@@ -2229,7 +2247,7 @@ h2 {
   border-radius: 999px;
   color: var(--amber-strong);
   background: var(--amber-bg);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   font-style: normal;
   line-height: 1.4;
@@ -2250,7 +2268,7 @@ h2 {
 .ledger-record-card .record-state-label {
   grid-area: actions;
   justify-self: end;
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .ledger-record-card .icon-action {
@@ -2273,13 +2291,23 @@ h2 {
   background: var(--bg-surface);
 }
 
-/* One line cannot hold date, title, merchant, account · category, badge,
-   amount, and two actions once the row itself drops below ~404px (this
-   container minus its 12px padding). Give the meta its own row rather than
-   ellipsising the account and category into a stub. The query is on the row's
-   container, so a narrow panel on a wide screen and a narrow phone behave the
-   same way. */
-@container ledger-rows (max-width: 404px) {
+/* The row's type scale is what decides these tiers, not a round number. The item
+   and the amount are body text at 16px; the date, merchant, account · category,
+   badge, and undo label are auxiliary at 14px (plan §5.2). Measured at those
+   sizes a row needs roughly 450px of container to hold one line, and roughly
+   300px to keep the account · category line worth reading once it moves to a row
+   of its own.
+
+   Below 300px the amount takes a line rather than squeezing the name, the
+   merchant, and the account into stubs: the trade is row height for legibility,
+   which is the point of the type floor. A 320px phone leaves the ledger section
+   262px, so that trade is what the narrowest supported screen gets.
+
+   The queries are on the row's container, so a narrow panel on a wide screen and
+   a narrow phone behave the same way. */
+
+/* Two lines: the meta moves under the name. */
+@container ledger-rows (max-width: 449px) {
   .ledger-record-card {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
@@ -2289,15 +2317,41 @@ h2 {
   }
 }
 
+/* Three lines: the amount moves to its own row, so the name and the account ·
+   category keep the full column instead of collapsing to a few characters. */
+@container ledger-rows (max-width: 299px) {
+  .ledger-record-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date name   actions"
+      "date meta   status"
+      "date amount amount";
+    row-gap: 1px;
+  }
+}
+
 /* Engines without container queries use the viewport as a coarser proxy for
-   the same intent, so narrow screens do not fall back to the clipped row. */
+   the same intent — set a little wide, so the fallback lands on the roomier
+   layout rather than the cramped one — so narrow screens do not fall back to
+   the clipped row. */
 @supports not (container-type: inline-size) {
-  @media (max-width: 440px) {
+  @media (max-width: 520px) {
     .ledger-record-card {
       grid-template-columns: auto minmax(0, 1fr) auto auto;
       grid-template-areas:
         "date name amount actions"
         "date meta status actions";
+      row-gap: 1px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .ledger-record-card {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "date name   actions"
+        "date meta   status"
+        "date amount amount";
       row-gap: 1px;
     }
   }

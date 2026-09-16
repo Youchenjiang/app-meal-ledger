@@ -5,6 +5,7 @@ import {
   createExpenseRow,
   expectNoClippedText,
   expectReadableWidth,
+  fontSizeOf,
   measureRows,
   openWorkspace,
   ROW_CONTAINER_SELECTOR,
@@ -30,15 +31,17 @@ const LONG_ITEM = "有夠長的品項名稱也應該先被截斷而不是把整�
 // Values with a bounded length. A date, a status badge, and a currency total
 // always fit in a row of any supported width, so an ellipsis on one of them is
 // a defect at every width.
-const BOUNDED_FIELDS = [".record-date", ".record-status", ".record-amount strong"];
+const ROW_AMOUNT_SELECTOR = ".record-amount strong";
+const BOUNDED_FIELDS = [".record-date", ".record-status", ROW_AMOUNT_SELECTOR];
 // Values with an unbounded length: these may be ellipsised, but must keep
 // enough room to stay recognisable.
 const MAY_TRUNCATE = [".record-item", ".record-merchant"];
 
 // The narrowest container the row supports is documented in
 // docs/testing/visual-regression.md. A 320px phone (the narrowest viewport the
-// app targets) leaves the ledger section roughly this much room.
-const SUPPORTED_WIDTHS = [900, 620, 440, 405, 404, 320, 260, 240];
+// app targets) leaves the ledger section 262px, which is in the sweep. Both tier
+// boundaries are too, with the width just under each one.
+const SUPPORTED_WIDTHS = [900, 620, 470, 450, 449, 440, 420, 380, 320, 300, 299, 280, 262, 240];
 // Below the supported floor the row must still degrade gracefully: bounded
 // values stay whole and nothing spills out of the card.
 const SUB_FLOOR_WIDTHS = [220, 200];
@@ -48,10 +51,14 @@ const SUB_FLOOR_WIDTHS = [220, 200];
 // can reach — otherwise a clipped account name is simply lost.
 const TRUNCATABLE_FIELDS = [".record-item", ".record-merchant", ".record-detail-line"];
 
-const MIN_TRUNCATABLE_WIDTH = 40;
-// What the account · category line may be reduced to before it stops saying
-// anything: about eight CJK characters, or the tail of a long latin name.
-const MIN_DETAIL_WIDTH = 56;
+// How much room a shortened field must keep before it stops saying anything,
+// counted in characters at the field's own rendered size. Three characters of an
+// item name; five of the account · category line. The floor is derived rather
+// than hardcoded in pixels because the row's type scale moves: a pixel floor
+// silently means fewer characters every time the text gets bigger, which is
+// exactly how a "readable" guarantee turns into a stub.
+const MIN_ITEM_CHARS = 3;
+const MIN_DETAIL_CHARS = 5;
 
 const TWD_ROW: ExpenseRowFields = {
   account: LONG_CJK_ACCOUNT,
@@ -128,13 +135,16 @@ test("keeps every bounded value whole when the ledger holds hostile content", as
   await page.setViewportSize({ width: 1280, height: 900 });
   await seedHostileLedger(page);
 
+  const itemFloor = MIN_ITEM_CHARS * (await fontSizeOf(page, ROW_SELECTOR, ".record-item"));
+  const detailFloor = MIN_DETAIL_CHARS * (await fontSizeOf(page, ROW_SELECTOR, ".record-detail-line"));
+
   for (const width of SUPPORTED_WIDTHS) {
     await setRowContainerWidth(page, width);
     const label = `container ${width}px with long names and three currencies`;
 
     await expectNoClippedText(page, ROW_SELECTOR, BOUNDED_FIELDS, label);
     for (const selector of MAY_TRUNCATE) {
-      await expectReadableWidth(page, ROW_SELECTOR, selector, MIN_TRUNCATABLE_WIDTH, label);
+      await expectReadableWidth(page, ROW_SELECTOR, selector, itemFloor, label);
     }
     await expectTruncatedTextIsReachable(page, label);
 
@@ -151,8 +161,8 @@ test("keeps every bounded value whole when the ledger holds hostile content", as
       if (row.detailClipped) {
         expect(
           row.detailWidth,
-          `${label}: "${row.detailText}" is reduced to ${row.detailWidth}px`,
-        ).toBeGreaterThanOrEqual(MIN_DETAIL_WIDTH);
+          `${label}: "${row.detailText}" is reduced to ${row.detailWidth}px, under the ${detailFloor}px its own size owes ${MIN_DETAIL_CHARS} characters`,
+        ).toBeGreaterThanOrEqual(detailFloor);
       }
     }
   }
@@ -228,4 +238,25 @@ test("shows every currency total in the section summary at any supported width",
 
   await setRowContainerWidth(page, null);
   expect(errors, `browser errors while rendering the summary: ${errors.join(" | ")}`).toEqual([]);
+});
+
+test("writes a row amount and its section subtotal the same way", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedHostileLedger(page);
+
+  const section = page.locator(ROW_CONTAINER_SELECTOR).first();
+  // The summary glues its currency code to the amount with a non-breaking space;
+  // normalise that away so this is about the number's written form.
+  const summary = ((await section.locator(SECTION_SUMMARY_SELECTOR).first().textContent()) ?? "").replaceAll("\u00A0", " ");
+  const rowAmounts = (await section.locator(ROW_AMOUNT_SELECTOR).allTextContents()).map((text) => text.trim());
+
+  expect(rowAmounts).toHaveLength(ROWS.length);
+  for (const amount of rowAmounts) {
+    // Each currency appears in exactly one row here, so that row's amount *is*
+    // the subtotal printed above it. Grouping or decimals that drift apart
+    // between the two surfaces break this without either being read by hand.
+    expect(summary, `the section summary should show ${amount} the way the row writes it`).toContain(amount);
+  }
+  // And the totals the summary claims are the row amounts, not a second format.
+  expect(rowAmounts).toEqual(expect.arrayContaining(EXPECTED_TOTALS));
 });
