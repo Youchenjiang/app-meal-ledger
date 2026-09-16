@@ -203,8 +203,13 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await openWorkspace(page);
-  await expect(page.locator("nav[aria-label='MealLedger 導覽']")).toBeVisible();
+  const navigation = page.locator("nav[aria-label='MealLedger 導覽']");
+  await expect(navigation).toBeVisible();
   await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
+  const navBox = await navigation.boundingBox();
+  expect(navBox?.x).toBe(0);
+  expect(navBox?.height).toBeGreaterThanOrEqual(899);
+  expect(navBox?.width).toBeGreaterThan(180);
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -279,15 +284,62 @@ test("keeps the mobile workspace header aligned across routes", async ({ page })
   expect(errors).toEqual([]);
 });
 
-test("keeps the compact navigation on one row", async ({ page }) => {
+// Above the 900px breakpoint the shell is a left sidebar, not the bottom bar the
+// mobile breakpoint falls back to (see `.bottom-nav` in src/styles.css), so the
+// items share a left edge and stack downwards instead of sharing one row. 設定 is
+// pinned to the bottom of the column on purpose, so the gap between items is not
+// uniform and is deliberately not asserted.
+test("keeps the desktop navigation a full-height left sidebar", async ({ page }) => {
   const errors = collectBrowserErrors(page);
   await page.setViewportSize({ width: 1000, height: 900 });
 
   await openWorkspace(page);
-  const tops = await page.locator("nav[aria-label='MealLedger 導覽'] .nav-item").evaluateAll((items) =>
-    items.map((item) => Math.round(item.getBoundingClientRect().top)),
+  const navigation = page.locator("nav[aria-label='MealLedger 導覽']");
+  await expect(navigation).toBeVisible();
+  const items = await navigation.locator(".nav-item").evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return {
+        label: (element.textContent ?? "").trim(),
+        left: Math.round(box.left),
+        top: Math.round(box.top),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+      };
+    }),
   );
-  expect(new Set(tops).size).toBe(1);
+
+  expect(items.map((item) => item.label), "the sidebar lists every route once").toEqual([
+    "概覽",
+    "明細",
+    "新增",
+    "專區",
+    "設定",
+  ]);
+  expect(new Set(items.map((item) => item.left)).size, "every item shares one left edge").toBe(1);
+
+  const tops = items.map((item) => item.top);
+  expect(tops, "the items stack downwards in DOM order").toEqual([...tops].sort((a, b) => a - b));
+  expect(new Set(tops).size, "no two items sit on one row").toBe(items.length);
+
+  // Every nav item is a touch target, per content-ui-restructure-handoff.md §5.2.
+  for (const item of items) {
+    expect(item.height, `${item.label}: touch target height`).toBeGreaterThanOrEqual(44);
+    expect(item.width, `${item.label}: touch target width`).toBeGreaterThanOrEqual(44);
+  }
+
+  // A sidebar means the content column starts to the right of the rail. If the
+  // rail ever became a full-width stacked list, the arrangement assertions above
+  // would still hold and only this one would notice.
+  const navigationBox = await navigation.boundingBox();
+  const contentLeft = await page
+    .locator(".page-header")
+    .first()
+    .evaluate((element) => Math.round(element.getBoundingClientRect().left));
+  expect(contentLeft, "the content column sits beside the sidebar").toBeGreaterThanOrEqual(
+    Math.round(navigationBox?.right ?? 0),
+  );
+
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });

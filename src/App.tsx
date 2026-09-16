@@ -860,11 +860,14 @@ function BottomNav({ route, reviewCount, navigate }: Readonly<{
   const { t: translate } = useI18n();
   return (
     <nav className="bottom-nav" aria-label={translate("nav.navAria")}>
+      <div className="nav-brand">
+        <Brand caption={translate("nav.brandCaption")} />
+      </div>
       {navItems.map((item) => {
         const Icon = item.icon;
         return (
           <button
-            className={`nav-item ${route === item.route ? "active" : ""} ${item.route === "capture" ? "nav-create" : ""}`}
+            className={`nav-item nav-item-${item.route} ${route === item.route ? "active" : ""} ${item.route === "capture" ? "nav-create" : ""}`}
             key={item.route}
             type="button"
             aria-current={route === item.route ? "page" : undefined}
@@ -2421,7 +2424,7 @@ function LedgerPage({
   const deleteConfirmRecord = deleteConfirmRecordId ? records.find((item) => item.id === deleteConfirmRecordId) ?? null : null;
   const hardDelete = deleteAction === "hard-delete";
   return (
-    <div className="route-stack">
+    <div className="route-stack ledger-page">
       <LedgerRecordsView
         records={records}
         drafts={drafts}

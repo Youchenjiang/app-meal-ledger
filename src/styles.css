@@ -77,7 +77,7 @@ a {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -133,8 +133,7 @@ a {
 }
 
 .auth-provider-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
 }
 
@@ -144,7 +143,7 @@ a {
 }
 
 .auth-forgot-action {
-  justify-self: start;
+  justify-self: end;
   min-height: 28px;
   padding: 0;
   font-size: 13px;
@@ -572,14 +571,21 @@ a {
 }
 
 .bottom-nav {
-  position: fixed;
+  position: sticky;
   z-index: 40;
-  inset: auto 0 0 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  height: 68px;
-  border-top: 1px solid var(--border);
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px 16px 18px;
+  border-right: 1px solid var(--border);
   background: var(--bg-nav);
+}
+
+.nav-brand {
+  display: block;
+  margin-bottom: 22px;
 }
 
 .brand {
@@ -628,18 +634,19 @@ a {
 
 .nav-item {
   position: relative;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 3px;
-  padding: 6px 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 7px;
   border: 0;
   color: var(--text-subtle);
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.1;
-  text-align: center;
+  text-align: left;
 }
 
 .nav-icon {
@@ -685,6 +692,7 @@ a {
 .nav-item:hover,
 .nav-item:focus-visible {
   color: var(--brand-active);
+  background: var(--brand-tint-2);
   outline: none;
 }
 
@@ -693,43 +701,43 @@ a {
 }
 
 .nav-create {
-  padding-top: 18px;
+  padding-top: 8px;
 }
 
 .nav-create .nav-icon {
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  width: 46px;
-  height: 46px;
-  margin-left: -23px;
-  border-radius: 50%;
-  color: var(--on-brand);
-  background: var(--brand);
-  box-shadow: 0 3px 8px rgba(47, 93, 80, 0.35);
+  position: static;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
 }
 
 .nav-create.active .nav-icon,
 .nav-create:hover .nav-icon,
 .nav-create:focus-visible .nav-icon {
-  background: var(--brand-hover-bg);
+  background: transparent;
+}
+
+.nav-item-settings {
+  margin-top: auto;
 }
 
 .workspace {
   display: grid;
   align-content: start;
   gap: 20px;
-  padding: 28px 28px 96px;
+  width: min(100%, 1184px);
+  margin: 0 auto;
+  padding: 28px 32px 40px;
 }
 
-/* 新增 voice-capture route: a fixed, non-scrolling screen like the
-   wireframe — progress at top, mic stage centered, actions at the bottom. */
 .workspace-voice {
-  height: 100dvh;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 20px;
 }
 
 .workspace-voice .page-header .ai-mode-switch {
@@ -744,31 +752,25 @@ a {
 }
 
 .workspace-voice .capture-layout {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .workspace-voice .ai-ledger-panel {
-  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .workspace-voice .mode-b-panel {
-  flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 
-/* Mode A suggestion list scrolls internally so the page never moves. */
 .workspace-voice .ai-suggestions {
   min-height: 0;
-  overflow-y: auto;
 }
 
 .page-header {
@@ -1216,6 +1218,28 @@ h2 {
   display: grid;
   min-width: 0;
   gap: 16px;
+}
+
+.settings-content {
+  min-width: 0;
+  max-width: 1080px;
+}
+
+.settings-content > .panel,
+.settings-content > .settings-preferences-block {
+  width: 100%;
+}
+
+.settings-content .auth-form {
+  max-width: 460px;
+}
+
+.overview-page {
+  max-width: 1080px;
+}
+
+.ledger-page {
+  max-width: 1120px;
 }
 
 .settings-section {
@@ -3238,18 +3262,12 @@ button.action-card.unavailable {
 }
 
 @media (max-width: 1100px) {
-  .app-shell {
-    align-content: start;
-    grid-template-columns: 1fr;
-  }
-
   .workspace {
-    padding: 20px 20px 92px;
+    padding: 20px 20px 40px;
   }
 
   .topbar,
-  .content-grid,
-  .summary-grid {
+  .content-grid {
     grid-template-columns: 1fr;
   }
 
@@ -3258,6 +3276,72 @@ button.action-card.unavailable {
     flex-direction: column;
   }
 
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    align-content: start;
+    grid-template-columns: 1fr;
+  }
+
+  .bottom-nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: 68px;
+    padding: 0;
+    border-top: 1px solid var(--border);
+    border-right: 0;
+  }
+
+  .nav-brand {
+    display: none;
+  }
+
+  .nav-item {
+    display: grid;
+    min-height: 0;
+    align-content: center;
+    justify-items: center;
+    gap: 3px;
+    padding: 6px 4px 8px;
+    border-radius: 0;
+    background: transparent;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .nav-item-settings {
+    margin-top: 0;
+  }
+
+  .nav-create {
+    padding-top: 18px;
+  }
+
+  .nav-create .nav-icon {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    border-radius: 50%;
+    color: var(--on-brand);
+    background: var(--brand);
+    box-shadow: 0 3px 8px rgba(47, 93, 80, 0.35);
+  }
+
+  .nav-create.active .nav-icon,
+  .nav-create:hover .nav-icon,
+  .nav-create:focus-visible .nav-icon {
+    background: var(--brand-hover-bg);
+  }
+
+  .workspace {
+    padding-bottom: 92px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -3331,7 +3415,7 @@ button.action-card.unavailable {
 
   .workspace,
   .signed-out-shell {
-    padding: 10px;
+    padding: 16px;
   }
 
   .workspace {
