@@ -465,6 +465,11 @@ export const zhTW: Record<string, string> = {
   "attach.clearPending": "清除待上傳附件",
 
   // --- settings ---
+  "settings.sectionsAria": "設定分類",
+  "import.exportFormat": "匯出格式",
+  "settings.accountTab": "帳號",
+  "settings.dataTab": "資料",
+  "settings.categoriesTab": "類別",
   "settings.preferencesTab": "相關設定",
   "settings.appearanceEyebrow": "外觀",
   "settings.themeTitle": "主題",

@@ -46,6 +46,8 @@ async function addCaptureAccount(user: ReturnType<typeof userEvent.setup>, name:
 
 async function addAccount(user: ReturnType<typeof userEvent.setup>, name: string, currency = "TWD") {
   await user.click(screen.getByRole("button", { name: "設定" }));
+  await user.click(screen.getByRole("tab", { name: "相關設定" }));
+  if (!screen.queryByLabelText("帳戶名稱")) await user.click(screen.getByRole("button", { name: "新增帳戶" }));
   await user.clear(screen.getByLabelText("帳戶名稱"));
   await user.selectOptions(screen.getByLabelText("幣別"), currency);
   await user.type(screen.getByLabelText("帳戶名稱"), name);
@@ -100,6 +102,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     expect(screen.getByRole("heading", { name: "AI 口說偏好" })).toBeInTheDocument();
 
     const accountRow = screen.getByRole("group", { name: "帳戶" });
@@ -119,6 +122,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     const languageGroup = screen.getByRole("group", { name: "語言" });
     await user.click(within(languageGroup).getByRole("radio", { name: "English" }));
 
@@ -140,11 +144,11 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("button", { name: "開啟首次帳戶設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.type(screen.getByLabelText("帳戶名稱"), "Bank account");
     await user.click(screen.getByRole("radio", { name: "輸入目前餘額" }));
     await user.type(screen.getByLabelText("目前餘額"), "2500");
-    await user.click(screen.getByRole("button", { name: "建立帳戶" }));
+    await user.click(screen.getByRole("button", { name: "新增帳戶" }));
     await user.click(screen.getByRole("button", { name: "概覽" }));
 
     expect(await screen.findByRole("heading", { name: "概覽" })).toBeInTheDocument();
@@ -370,14 +374,16 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
 
     expect(screen.getByRole("button", { name: "匯出 CSV" })).toHaveClass("primary-action");
-    expect(screen.getByRole("button", { name: "匯出 JSON" })).toHaveClass("secondary-action");
-    expect(screen.getByRole("button", { name: "匯出 ZIP" })).toHaveClass("secondary-action");
+    expect(screen.getByLabelText("匯出格式")).toHaveValue("csv");
     await user.click(screen.getByRole("button", { name: "匯出 CSV" }));
     expect(screen.getByText("CSV 匯出已下載,未包含圖片內容。")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("匯出格式"), "json");
     await user.click(screen.getByRole("button", { name: "匯出 JSON" }));
     expect(screen.getByText("JSON 匯出已下載,未包含圖片內容。")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("匯出格式"), "zip");
     await user.click(screen.getByRole("button", { name: "匯出 ZIP" }));
 
     expect(createObjectURL).toHaveBeenCalledTimes(3);
@@ -394,6 +400,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
     const file = new File([`date,account,amount\n${testLocalDate()},Cash,417\n`], "ledger.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV 匯入檔案"), file);
 
@@ -408,6 +415,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "ledger.csv", { type: "text/csv" });
@@ -428,6 +436,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate.csv", { type: "text/csv" });
@@ -445,6 +454,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate-actions.csv", { type: "text/csv" });
@@ -466,6 +476,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate-draft.csv", { type: "text/csv" });
@@ -722,6 +733,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "資料" }));
     await user.upload(screen.getByLabelText("CSV 匯入檔案"), new File(["unknown,other\nvalue\n"], "invalid.csv", { type: "text/csv" }));
 
     const rejectionMessage = await screen.findByText(/CSV 已拒絕:/);
@@ -1054,6 +1066,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.type(screen.getByLabelText("帳戶名稱"), "Savings");
     await user.selectOptions(screen.getByLabelText("帳戶類型"), "bank");
     await user.click(screen.getByRole("radio", { name: "輸入目前餘額" }));
@@ -1170,6 +1183,7 @@ describe("App shell draft flow", () => {
 
     // Switch the delete behavior to 真正刪除 in 相關設定.
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.click(screen.getByRole("radio", { name: "真正刪除" }));
     expect(window.localStorage.getItem("mealledger.settings.delete-action")).toBe("hard-delete");
 
@@ -1191,6 +1205,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.click(screen.getByRole("radio", { name: "淺色" }));
 
     expect(window.localStorage.getItem("mealledger.settings.theme")).toBe("light");
@@ -1206,6 +1221,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "類別" }));
 
     // Categories without records must not render a bare count glyph.
     expect(screen.queryByText(/筆/u)).not.toBeInTheDocument();
@@ -1227,14 +1243,15 @@ describe("App shell draft flow", () => {
 
     // Account with a 2500 starting balance.
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("button", { name: "開啟首次帳戶設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.type(screen.getByLabelText("帳戶名稱"), "Daily wallet");
     await user.click(screen.getByRole("radio", { name: "輸入目前餘額" }));
     await user.type(screen.getByLabelText("目前餘額"), "2500");
-    await user.click(screen.getByRole("button", { name: "建立帳戶" }));
+    await user.click(screen.getByRole("button", { name: "新增帳戶" }));
 
     // Enable the policy in 相關設定.
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.click(screen.getByRole("radio", { name: "不允許負餘額" }));
     expect(window.localStorage.getItem("mealledger.settings.negative-balance-policy")).toBe("reject");
 
@@ -1257,6 +1274,7 @@ describe("App shell draft flow", () => {
 
     // Disabling the policy allows the same expense.
     await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
     await user.click(screen.getByRole("radio", { name: "允許負餘額" }));
     await goToCapture(user);
     await user.selectOptions(screen.getByLabelText("帳戶"), "Daily wallet");

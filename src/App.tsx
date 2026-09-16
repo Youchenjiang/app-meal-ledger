@@ -5105,6 +5105,7 @@ function SavedRecordPanel({ recordCount, navigate }: Readonly<{ recordCount: num
 
 type AccountSetupPanelProps = {
   accounts: LocalAccount[];
+  balances: ReturnType<typeof calculateAccountBalances>;
   accountName: string;
   accountCurrency: string;
   accountType: string;
@@ -5124,7 +5125,7 @@ type AccountSetupPanelProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
-type AccountSetupFormProps = Omit<AccountSetupPanelProps, "accounts" | "onReopenOnboarding">;
+type AccountSetupFormProps = Omit<AccountSetupPanelProps, "accounts" | "balances" | "onReopenOnboarding">;
 
 function AccountSetupForm({
   accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
@@ -5151,17 +5152,18 @@ function AccountSetupForm({
 }
 
 function AccountSetupPanel({
-  accounts, accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
+  accounts, balances, accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
   onAccountNameChange, onAccountCurrencyChange, onAccountTypeChange, onAllowNegativeBalanceChange, onBalanceModeChange,
   onBalanceChange, onBalanceDateChange, onReopenOnboarding, onSubmit,
 }: Readonly<AccountSetupPanelProps>) {
   const { t } = useI18n();
+  const [adding, setAdding] = useState(false);
+  useEffect(() => setAdding(false), [accounts.length]);
   return (
     <Panel title={t("settings.accountPanelTitle")} eyebrow={t("settings.accountPanelEyebrow")}>
-      <div className="account-setup-actions">
-        <button className="secondary-action align-start" type="button" onClick={onReopenOnboarding}>{t("settings.openOnboarding")}</button>
-      </div>
-      <AccountSetupForm
+      {accounts.length > 0 ? <ul className="account-list" aria-label={t("settings.availableAccountsAria")}>{accounts.map((account) => <li key={account.id}><div><strong>{account.name}</strong><span>{t(`field.accountType${(account.accountType || "cash").replace(/^./, (letter) => letter.toUpperCase())}`)} · {account.currency}</span></div><strong>{formatAccountBalance(balances.find((item) => item.id === account.id)?.balance ?? 0, account.currency)}</strong></li>)}</ul> : null}
+      {accounts.length > 0 && !adding ? <button className="secondary-action align-start" type="button" onClick={() => setAdding(true)}><Plus size={18} aria-hidden="true" />{t("settings.addAccount")}</button> : null}
+      {accounts.length === 0 || adding ? <AccountSetupForm
         accountName={accountName}
         accountCurrency={accountCurrency}
         accountType={accountType}
@@ -5178,15 +5180,15 @@ function AccountSetupPanel({
         onBalanceChange={onBalanceChange}
         onBalanceDateChange={onBalanceDateChange}
         onSubmit={onSubmit}
-      />
-      {accounts.length === 0 ? <p className="panel-copy">{t("settings.noAccountsYet")}</p> : null}
-      {accounts.length > 0 ? <ul className="account-list" aria-label={t("settings.availableAccountsAria")}>{accounts.map((account) => <li key={account.id}><strong>{account.name}</strong><span>{account.currency}</span></li>)}</ul> : null}
+      /> : null}
+      {adding ? <button className="quiet-action align-start" type="button" onClick={() => setAdding(false)}>{t("settings.categoryCancel")}</button> : null}
     </Panel>
   );
 }
 
-function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onReopenOnboarding }: Readonly<{
+function LedgerAccountsPanel({ accounts, records, onAddAccount, onSaveInitialFunding, onReopenOnboarding }: Readonly<{
   accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -5226,6 +5228,7 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   return (
     <AccountSetupPanel
       accounts={accounts}
+      balances={calculateAccountBalances(accounts, records)}
       accountName={accountName}
       accountCurrency={accountCurrency}
       accountType={accountType}
@@ -5268,6 +5271,8 @@ type SettingsPageProps = AccountPageProps & {
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 };
 
+type SettingsSection = "account" | "data" | "categories" | "preferences";
+
 function SettingsPage({
   accounts,
   records,
@@ -5289,6 +5294,7 @@ function SettingsPage({
   ...accountProps
 }: Readonly<SettingsPageProps>) {
   const { t } = useI18n();
+  const [section, setSection] = useState<SettingsSection>("account");
 
   const renderPreferences = () => (
     <section className="settings-section" aria-labelledby="settings-preferences-heading">
@@ -5296,6 +5302,7 @@ function SettingsPage({
       <div className="route-stack">
         <LedgerAccountsPanel
           accounts={accounts}
+          records={records}
           onAddAccount={onAddAccount}
           onSaveInitialFunding={onSaveInitialFunding}
           onReopenOnboarding={onReopenOnboarding}
@@ -5337,19 +5344,39 @@ function SettingsPage({
     </section>
   );
 
+  const content = section === "account"
+    ? <AccountPage {...accountProps} />
+    : section === "data"
+      ? <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+      : section === "categories"
+        ? <CategoriesPanel records={records} customCategories={customCategories} setCustomCategories={setCustomCategories} />
+        : renderPreferences();
+
+  const tabs: Array<{ id: SettingsSection; label: string }> = [
+    { id: "account", label: t("settings.accountTab") },
+    { id: "data", label: t("settings.dataTab") },
+    { id: "categories", label: t("settings.categoriesTab") },
+    { id: "preferences", label: t("settings.preferencesTab") },
+  ];
+
   return (
     <section className="settings-page">
-      <div className="route-stack">
-        <section className="settings-section" aria-labelledby="settings-login-heading">
-          <AccountPage headingId="settings-login-heading" {...accountProps} />
-        </section>
-        <section className="settings-section" aria-labelledby="settings-portability-heading">
-          <ImportExportPanel headingId="settings-portability-heading" accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
-        </section>
-        <section className="settings-section" aria-labelledby="categories-title">
-          <CategoriesPanel records={records} customCategories={customCategories} setCustomCategories={setCustomCategories} />
-        </section>
-        {renderPreferences()}
+      <div className="settings-tabs" role="tablist" aria-label={t("settings.sectionsAria")}>
+        {tabs.map((tab) => (
+          <button
+            className={`settings-tab ${section === tab.id ? "active" : ""}`}
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={section === tab.id}
+            onClick={() => setSection(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div className="settings-content" role="tabpanel">
+        {content}
       </div>
     </section>
   );
@@ -5751,11 +5778,9 @@ function AccountPage({ headingId, authState, authMessage, cloudDataOwnerMatches,
       <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
       <div className="auth-password-row">
         <label htmlFor="account-password">{t("auth.password")}</label>
-        {authView === "sign-in" ? (
-          <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>{t("auth.forgotPassword")}</button>
-        ) : null}
       </div>
       <PasswordInput id="account-password" value={password} autoComplete={authView === "sign-up" ? "new-password" : "current-password"} visible={passwordVisible} onValueChange={setPassword} onToggleVisible={() => setPasswordVisible((current) => !current)} />
+      {authView === "sign-in" ? <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>{t("auth.forgotPassword")}</button> : null}
       {authView === "sign-up" ? (
         <>
           <label htmlFor="account-confirm-password">{t("auth.confirmPassword")}</label>
@@ -5879,6 +5904,7 @@ function ImportExportPanel({ headingId, accounts, records, onImportRecord, onMer
   const [exportMessage, setExportMessage] = useState("");
   const [exportProgress, setExportProgress] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState("csv");
 
   const handleCsvSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -6003,9 +6029,12 @@ function ImportExportPanel({ headingId, accounts, records, onImportRecord, onMer
       <section className="portability-section" aria-labelledby="ledger-export-heading">
         <h3 id="ledger-export-heading">{t("import.exportHeading")}</h3>
         <div className="export-actions">
-          <button className="primary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage(t("import.csvDownloaded")); }}>{t("import.exportCsv")}</button>
-          <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage(t("import.jsonDownloaded")); }}>{t("import.exportJson")}</button>
-          <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? t("import.exportZipProgress", { percent: exportProgress }) : t("import.exportZip")}</button>
+          <select aria-label={t("import.exportFormat")} value={exportFormat} disabled={exporting} onChange={(event) => setExportFormat(event.target.value)}><option value="csv">CSV</option><option value="json">JSON</option><option value="zip">ZIP</option></select>
+          <button className="primary-action" type="button" disabled={exporting} onClick={() => {
+            if (exportFormat === "zip") { exportZip().catch(() => undefined); return; }
+            downloadTextFile(exportFormat === "csv" ? serializeCleanCsv(records) : serializeCleanJson(records), `mealledger-ledger.${exportFormat}`, exportFormat === "csv" ? "text/csv;charset=utf-8" : "application/json;charset=utf-8");
+            setExportMessage(t(exportFormat === "csv" ? "import.csvDownloaded" : "import.jsonDownloaded"));
+          }}>{exporting ? t("import.exportZipProgress", { percent: exportProgress }) : t(exportFormat === "csv" ? "import.exportCsv" : exportFormat === "json" ? "import.exportJson" : "import.exportZip")}</button>
         </div>
         {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
       </section>
@@ -6016,7 +6045,7 @@ function ImportExportPanel({ headingId, accounts, records, onImportRecord, onMer
           <label className="secondary-action file-picker-button" htmlFor="csv-import-file">{t("import.chooseCsv")}</label>
           <span className="file-picker-name" aria-live="polite">{selectedFileName || t("import.noFileSelected")}</span>
         </div>
-        <p className="panel-copy" aria-live="polite">{importMessage}</p>
+        {selectedFileName ? <p className="panel-copy" aria-live="polite">{importMessage}</p> : null}
       </section>
       {importItems.length > 0 ? (
         <section className="draft-list" aria-label={t("import.reviewEyebrow")}>

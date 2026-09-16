@@ -20,6 +20,7 @@ async function openWorkspace(page: Page) {
 
 async function addAccount(page: Page, name: string) {
   await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
   await page.getByLabel("帳戶名稱").fill(name);
   await page.getByRole("button", { name: "新增帳戶" }).click();
   await expect(page.getByLabel("可用帳戶")).toContainText(name);
@@ -219,6 +220,7 @@ test("switches the theme from 相關設定 and persists it across reloads", asyn
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
   await page.getByRole("radio", { name: "淺色", exact: true }).click();
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -227,6 +229,7 @@ test("switches the theme from 相關設定 and persists it across reloads", asyn
 
   // Restore the default 深色 choice so the rest of the suite is unaffected.
   await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
   await page.getByRole("radio", { name: "深色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   expect(errors).toEqual([]);
@@ -239,6 +242,8 @@ test("keeps the account page compact and aligned on mobile", async ({ page }) =>
   await openWorkspace(page);
   await page.getByRole("button", { name: "設定", exact: true }).click();
   await expect(page.getByRole("heading", { name: "選用雲端同步", exact: true })).toBeVisible();
+  const tabRows = await page.getByRole("tab").evaluateAll((tabs) => new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top))).size);
+  expect(tabRows).toBe(1);
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -372,6 +377,7 @@ test("keeps compact navigation stable near its breakpoint", async ({ page }) => 
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
   await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "明細帳戶", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);

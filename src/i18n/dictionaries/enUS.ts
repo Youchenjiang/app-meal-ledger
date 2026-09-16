@@ -464,6 +464,11 @@ export const enUS: Record<string, string> = {
   "attach.clearPending": "Clear pending uploads",
 
   // --- settings ---
+  "settings.sectionsAria": "Settings sections",
+  "import.exportFormat": "Export format",
+  "settings.accountTab": "Account",
+  "settings.dataTab": "Data",
+  "settings.categoriesTab": "Categories",
   "settings.preferencesTab": "Preferences",
   "settings.appearanceEyebrow": "Appearance",
   "settings.themeTitle": "Theme",
