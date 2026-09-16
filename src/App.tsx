@@ -45,6 +45,7 @@ import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { readDeleteAction, writeDeleteAction, type DeleteAction } from "./manualLedger/deletePolicy";
 import { negativeBalanceRejectionReason, readNegativeBalancePolicy, writeNegativeBalancePolicy, type NegativeBalancePolicy } from "./manualLedger/negativeBalance";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
+import { formatAmountString } from "./manualLedger/money";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 import { createMultiTableExportWithProgress, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
@@ -2379,7 +2380,7 @@ function LedgerRecordCard({ record, onEdit, onDelete, deleteAction }: Readonly<L
       </span>
       {record.status === "local-only" && !isVoided ? <em className="record-status">{t("ledger.localOnly")}</em> : null}
       <div className="draft-amount record-amount">
-        <strong>{record.currency} {record.amount}</strong>
+        <strong>{formatAmountString(record.amount, record.currency)}</strong>
       </div>
       <LedgerRecordActions isVoided={isVoided} onEdit={onEdit} onDelete={onDelete} deleteAction={deleteAction} />
     </article>

@@ -1608,6 +1608,26 @@ describe("ledger filters and type sections", () => {
     expect(screen.getByText(/小計 TWD 497/)).toBeInTheDocument();
   });
 
+  test("writes a row amount and its section subtotal the same way", async () => {
+    const user = userEvent.setup();
+    await seedLedger(user, [
+      seedRecord({ id: "big", kind: "expense", amount: "1234567", counterparty: "旅行社", itemName: "機票" }),
+    ]);
+
+    const expense = expenseSection();
+    const rowAmount = expense.querySelector(".record-amount strong")?.textContent?.trim() ?? "";
+    // The summary guards its currency code with a non-breaking space so the code
+    // cannot be orphaned from its number. Normalise that away so this guard is
+    // about the number's written form, not about wrap control.
+    const summary = (expense.querySelector(".ledger-section-heading > span")?.textContent ?? "").replace(/\u00A0/g, " ");
+
+    // A one-record section's subtotal *is* that record's amount, so the row text
+    // has to appear verbatim inside it. Grouping, decimals or spacing that drift
+    // apart between the two surfaces break this without either being read by hand.
+    expect(rowAmount).toBe("TWD 1,234,567");
+    expect(summary).toContain(rowAmount);
+  });
+
   test("filters by account chip, category, merchant, and free-text search", async () => {
     const user = userEvent.setup();
     await seedLedger(user, mixedLedger());

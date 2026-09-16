@@ -32,3 +32,25 @@ export function isNonZeroMoney(value: string, currency: string): boolean {
 export function minorUnitsToMajorNumber(minorUnits: bigint, currency: string): number {
   return Number(minorUnits) / 10 ** currencyPrecision(currency);
 }
+
+/**
+ * The one place a money value becomes text. Every surface that shows an amount
+ * calls this, so a ledger row and the section total above it cannot disagree on
+ * grouping or decimals — which is the drift that left rows printing
+ * `TWD 1234567` directly underneath a `小計 TWD 1,234,887`.
+ */
+export function formatAmount(value: number, currency: string): string {
+  return `${currency} ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)}`;
+}
+
+/**
+ * Formats an amount the way a record stores it (a decimal string). A value the
+ * currency cannot represent falls back to the raw text rather than printing NaN.
+ */
+export function formatAmountString(amount: string, currency: string): string {
+  const minorUnits = parseMinorUnits(amount, currency);
+  if (minorUnits === null) {
+    return `${currency} ${amount}`.trim();
+  }
+  return formatAmount(minorUnitsToMajorNumber(minorUnits, currency), currency);
+}
