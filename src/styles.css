@@ -2300,16 +2300,18 @@ h2 {
      account · category line fits whole at the tightest one-line width (it
      needs 113px; see docs/testing/visual-regression.md) with margin left for
      the platform the CI sweep runs on, while a long name truncates first. */
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.3fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.7fr) auto auto auto;
   grid-template-areas: "date name meta status amount actions";
   align-items: center;
   /* The gap and the row's own inset are kept tight: each pixel here is taken
      from the column tracks, and the row was tuned so the account · category
-     line just fits. The hover affordance is the background and border below,
-     not horizontal breathing room the compact layout cannot spare. */
-  column-gap: 6px;
+     line just fits — on Linux, where the CJK + latin text renders ~10px wider
+     than on Windows, as well as on Windows (the CI geometry sweep runs on
+     Linux). The hover affordance is the background and border below, not
+     horizontal breathing room the compact layout cannot spare. */
+  column-gap: 4px;
   min-height: 38px;
-  padding: 4px 2px;
+  padding: 4px 0;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
