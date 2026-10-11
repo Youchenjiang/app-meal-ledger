@@ -1,0 +1,62 @@
+# ==============================================================================
+# 🔍 GitHub CodeQL SAST Analysis (靜態程式碼安全性與語意資料流分析)
+#
+# 【功能說明】
+# 透過 GitHub 官方 CodeQL 引擎，對原始碼進行 AST 語意分析與污點資料流追蹤 (Dataflow / Taint Analysis)，
+# 深度偵測 SQL Injection、Command Injection、XSS、路徑遍歷 (Path Traversal)、不安全反序列化等嚴重漏洞。
+#
+# 【觸發方式】
+# 1. 每次推送到主要分支（main / master）或針對主要分支發起 Pull Request。
+# 2. 定期排程：每週一早上 06:00 UTC（台灣時間 14:00）自動巡檢現有程式碼。
+# 3. 支援手動觸發（workflow_dispatch）。
+#
+# 【支援語言與自訂】
+# 預設分析直譯式語言：[javascript-typescript, python]。
+# 如專案使用編譯式語言（如 C#、Java、C/C++），需依專案技術棧在步驟中加入建置指令 (Build Step)。
+#
+# 【掃描結果】
+# 掃描報告將自動整合至 GitHub 倉庫的「Security」->「Code scanning alerts」面板中。
+# ==============================================================================
+
+name: CodeQL Security Analysis
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: CodeQL SAST (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write # 寫入 Security Code Scanning 警報
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # CodeQL 支援語言: c-cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift
+        language: [javascript-typescript, python]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        # 若專案中未包含該特定語言檔案，continue-on-error 確保流程不因此中斷
+        continue-on-error: true
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"

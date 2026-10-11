@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createLocalAccount } from "../manualLedger/accounts";
+import { LanguageProvider } from "../i18n/react";
 import { ModeBPanel } from "./ModeBPanel";
 import type { SpeechRecognitionLike } from "./speech";
 
@@ -10,6 +12,10 @@ vi.mock("./client", () => ({ requestAiJson: vi.fn() }));
 
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
+
+function renderPanel(ui: ReactElement) {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
 
 const accounts = [{ name: "Daily wallet", currency: "TWD" }];
 const categories = ["午餐"];
@@ -49,9 +55,9 @@ afterEach(() => {
 
 describe("ModeBPanel", () => {
   test("walks the fields step by step and saves the assembled draft", async () => {
-    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => true);
+    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => null);
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} />);
 
     const fill = async (label: string, value: string) => {
       await user.type(screen.getByLabelText(label), value);
@@ -81,7 +87,7 @@ describe("ModeBPanel", () => {
     nextTranscript = "七月二十五";
     vi.stubGlobal("SpeechRecognition", FakeRecognition);
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "用說的" }));
 
@@ -96,7 +102,7 @@ describe("ModeBPanel", () => {
     nextTranscript = "2026-07-25";
     vi.stubGlobal("SpeechRecognition", FakeRecognition);
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "用說的" }));
 
@@ -110,7 +116,7 @@ describe("ModeBPanel", () => {
     nextTranscript = "七月二十五";
     vi.stubGlobal("SpeechRecognition", FakeRecognition);
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "用說的" }));
 
@@ -143,7 +149,7 @@ describe("ModeBPanel", () => {
     vi.mocked(requestAiJson).mockResolvedValue({ ok: true, data: { value: "" } });
     vi.stubGlobal("SpeechRecognition", InterimOnlyRecognition);
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "用說的" }));
 
@@ -176,7 +182,7 @@ describe("ModeBPanel", () => {
     }
     vi.stubGlobal("SpeechRecognition", SlowRecognition);
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "用說的" }));
 
@@ -187,7 +193,7 @@ describe("ModeBPanel", () => {
 
   test("shows a date picker for the date field and keeps the raw value for others", async () => {
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     expect(screen.getByLabelText("日期")).toHaveAttribute("type", "date");
     await user.type(screen.getByLabelText("日期"), "2026-07-25");
@@ -199,7 +205,7 @@ describe("ModeBPanel", () => {
 
   test("inserts a transfer destination step for transfers", async () => {
     const user = userEvent.setup();
-    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+    renderPanel(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.type(screen.getByLabelText("日期"), "2026-07-25");
     await user.click(screen.getByRole("button", { name: /填入此欄/u }));
@@ -216,9 +222,9 @@ describe("ModeBPanel", () => {
   test("creates a new account on save under the auto policy", async () => {
     const createdAccount = createLocalAccount("新錢包", "TWD", "account-1");
     const onResolveNewEntities = vi.fn(() => (createdAccount ? [createdAccount] : []));
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
-    render(
+    renderPanel(
       <ModeBPanel
         accounts={accounts}
         categories={categories}

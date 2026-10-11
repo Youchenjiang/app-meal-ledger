@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export const csvImportLimits = {
   maxBytes: 10 * 1024 * 1024,
   maxRows: 5_000,
@@ -100,7 +102,7 @@ function consumeUnquotedCsvCharacter(text: string, index: number, state: CsvPars
   const character = text[index];
   if (character === '"') {
     if (state.field.length === 0) state.quoted = true;
-    else state.errors.push(`Line ${state.line}: unexpected quote.`);
+    else state.errors.push(t("import.unexpectedQuote", { line: state.line }));
     return index;
   }
   if (character === ",") {
@@ -130,7 +132,7 @@ function parseCsv(text: string): { rows: string[][]; errors: string[] } {
     skipNextCharacter = nextIndex !== index;
   }
 
-  if (state.quoted) state.errors.push(`Line ${state.line}: unclosed quoted field.`);
+  if (state.quoted) state.errors.push(t("import.unclosedQuote", { line: state.line }));
   else if (state.field.length > 0 || state.row.length > 0) pushCsvRow(state);
   return { rows: state.rows, errors: state.errors };
 }
@@ -145,17 +147,17 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 
 export function validateCsvBytes(bytes: Uint8Array): CsvValidationResult {
   if (bytes.byteLength > csvImportLimits.maxBytes) {
-    return blankResult(`CSV file exceeds ${csvImportLimits.maxBytes / (1024 * 1024)} MB.`.split("\n"));
+    return blankResult(t("import.csvTooLarge", { max: csvImportLimits.maxBytes / (1024 * 1024) }).split("\n"));
   }
 
   const decoded = decodeUtf8(bytes);
   if (decoded === null) {
-    return blankResult(["CSV file must be valid UTF-8."]);
+    return blankResult([t("import.utf8Invalid")]);
   }
 
   const { rows, errors } = parseCsv(decoded.replace(/^\ufeff/u, ""));
   if (rows.length === 0) {
-    return blankResult(["CSV file must contain one header row.", ...errors]);
+    return blankResult([t("import.needHeader"), ...errors]);
   }
 
   const headers = rows[0].map((header) => header.trim());
@@ -163,21 +165,21 @@ export function validateCsvBytes(bytes: Uint8Array): CsvValidationResult {
   const duplicateHeaders = normalizedHeaders.filter((header, index) => normalizedHeaders.indexOf(header) !== index);
   const headerErrors = [
     ...errors,
-    ...(headers.includes("") ? ["CSV headers cannot be empty."] : []),
-    ...(duplicateHeaders.length > 0 ? ["CSV headers cannot contain duplicates."] : []),
+    ...(headers.includes("") ? [t("import.emptyHeader")] : []),
+    ...(duplicateHeaders.length > 0 ? [t("import.duplicateHeader")] : []),
     ...(headers.some((header) => supportedHeaders.has(header) || supportedHeaders.has(header.toLocaleLowerCase()))
       ? []
-      : ["CSV headers do not contain a supported ledger field."]),
+      : [t("import.unsupportedHeaders")]),
   ];
 
   const dataRows = rows.slice(1);
   if (dataRows.length > csvImportLimits.maxRows) {
-    headerErrors.push(`CSV file exceeds ${csvImportLimits.maxRows} data rows.`);
+    headerErrors.push(t("import.tooManyRows", { max: csvImportLimits.maxRows }));
   }
 
   for (const [index, dataRow] of dataRows.entries()) {
     if (dataRow.length !== headers.length) {
-      headerErrors.push(`Row ${index + 2} has ${dataRow.length} fields; expected ${headers.length}.`);
+      headerErrors.push(t("import.columnMismatch", { row: index + 2, count: dataRow.length, expected: headers.length }));
     }
   }
 

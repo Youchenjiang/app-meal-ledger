@@ -313,7 +313,7 @@ describe("auth provider", () => {
     await user.click(screen.getByRole("button", { name: "Unlink Google" }));
 
     expect(authMock.unlinkIdentity).toHaveBeenCalledWith({ id: "g1", user_id: "remote-user", identity_id: "g1", provider: "google" });
-    expect(screen.getByLabelText("auth-message")).toHaveTextContent("google sign-in removed.");
+    expect(screen.getByLabelText("auth-message")).toHaveTextContent("已移除 google 登入。");
     expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-in");
   });
 
@@ -323,6 +323,6 @@ describe("auth provider", () => {
 
     await user.click(screen.getByRole("button", { name: "Link Google" }));
 
-    expect(screen.getByLabelText("auth-message")).toHaveTextContent("Linking google is available after cloud authentication is configured.");
+    expect(screen.getByLabelText("auth-message")).toHaveTextContent("連結 google 需先設定雲端驗證。");
   });
 });

@@ -37,11 +37,11 @@ describe("media privacy and cleanup boundaries", () => {
 
     await expect(requestSignedUpload({ functions: { invoke: malformed } }, { contentType: "image/jpeg", kind: "receipt-scan" })).resolves.toEqual({
       ok: false,
-      error: "The upload boundary returned an invalid response.",
+      error: "上傳端點回傳無效回應。",
     });
     await expect(requestSignedUpload({ functions: { invoke: publicUrlOnly } }, { contentType: "image/jpeg", kind: "receipt-scan" })).resolves.toEqual({
       ok: false,
-      error: "The upload boundary returned an invalid response.",
+      error: "上傳端點回傳無效回應。",
     });
   });
 });

@@ -55,6 +55,26 @@ Becomes harder:
 - Navigation labels are now Chinese (概覽/明細/新增/專區/設定), so UI tests
   must target those labels.
 
+## Amendment: the bar renders icons only
+
+The bar was implemented with a caption under each of the five items. That made
+the center FAB the one item without a caption, which read as a missing label, and
+any attempt to lift the circle off the bar's top edge put it in the same strip as
+the captions. The bar now renders icons only: each `.nav-caption` is clipped, so
+it is the item's accessible name rather than a visible label, and the bar is one
+icon row tall.
+
+The decision above is unchanged — one bottom bar at every width, five equal-width
+items, the center 新增 raised as a circular "+".
+
+Becomes harder:
+
+- The four flat items are identified by glyph alone. 概覽/明細/設定 use widely
+  understood icons, but 專區 is a name this app invented, so its grid glyph
+  carries no meaning for a first-time reader until they open it.
+- The names live in CSS-clipped text. An item that loses its caption loses its
+  name too, which the navigation tests now assert against.
+
 ## References
 
 - [App shell requirements](../specs/app-shell/requirements.md)

@@ -1,6 +1,6 @@
 import type { LocalAccount } from "./accounts";
 import type { LocalLedgerRecord } from "./records";
-import { minorUnitsToMajorNumber, parseMinorUnits } from "./money";
+import { formatAmount, minorUnitsToMajorNumber, parseMinorUnits } from "./money";
 
 export type AccountBalance = LocalAccount & {
   balance: number;
@@ -51,5 +51,5 @@ export function calculateAccountBalances(
 }
 
 export function formatAccountBalance(balance: number, currency: string): string {
-  return `${currency} ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(balance)}`;
+  return formatAmount(balance, currency);
 }

@@ -73,18 +73,18 @@ describe("local official ledger records", () => {
   test("preserves explicit missing expense fields in the official record", () => {
     const missingExpense: TransactionDraft = {
       ...expense,
-      counterparty: "Merchant unavailable",
+      counterparty: "商家不詳",
       counterpartyMissing: true,
-      itemName: "Item unavailable",
+      itemName: "品項不詳",
       itemNameMissing: true,
     };
 
     const bundle = createOfficialRecordBundle(missingExpense, accounts, options);
 
     expect(bundle?.records[0]).toMatchObject({
-      counterparty: "Merchant unavailable",
+      counterparty: "商家不詳",
       counterpartyMissing: true,
-      itemName: "Item unavailable",
+      itemName: "品項不詳",
       itemNameMissing: true,
     });
   });

@@ -1,10 +1,70 @@
 :root {
-  color: #242321;
-  background: #f5f2ec;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  color-scheme: light;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
+  /* surfaces - modern clean minimalist */
+  --bg-page: #f8faf9;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f2f5f3;
+  --bg-surface-3: #e8eeea;
+  --bg-nav: rgba(255, 255, 255, 0.92);
+  --bg-disabled: #f0f3f1;
+  --bg-placeholder: #edf1ee;
+  --bg-camera: #181d1a;
+
+  /* text */
+  --text-primary: #191f1c;
+  --text-secondary: #48524d;
+  --text-muted: #737f79;
+  --text-subtle: #525d57;
+  --text-disabled: #98a29d;
+
+  /* brand - modern fresh emerald */
+  --brand: #1f7a5b;
+  --brand-text: #1f7a5b;
+  --brand-active: #135c43;
+  --brand-hover-bg: #166449;
+  --brand-strong: #17664c;
+  --brand-border-strong: #75a698;
+  --brand-focus: #8db9a4;
+  --brand-tint: #e1efe8;
+  --brand-tint-2: #edf6f1;
+  --brand-tint-3: #f4faf6;
+
+  /* amber */
+  --amber: #8a6428;
+  --amber-strong: #624414;
+  --amber-bg: #f8f1e3;
+  --amber-border: #e3d2ab;
+
+  /* danger */
+  --danger: #cf3c3c;
+  --danger-text: #b92f2f;
+  --danger-border: #f1c5c5;
+
+  /* borders - modern softer borders */
+  --border: #e3eae6;
+  --border-strong: #cbd7d0;
+  --border-soft: #edf2ef;
+
+  /* on-brand */
+  --on-brand: #ffffff;
+  --bg-disabled-2: #dce4e0;
+
+  /* The bar is icon-only, so its height is one icon row. The center 新增 circle
+     is painted around that row and rises --fab-overhang above the bar's top
+     edge; --fab-raise is how far it and its glyph sit above the row, derived so
+     changing the bar height or the circle size keeps the overhang the same. */
+  --nav-height: 56px;
+  --fab-size: 46px;
+  --fab-overhang: 18px;
+  --fab-raise: calc((var(--fab-size) - var(--nav-height)) / 2 - var(--fab-overhang));
+  --fab-shadow: 0 3px 8px rgba(47, 93, 80, 0.35);
 }
 
 * {
@@ -27,7 +87,6 @@ a {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -43,9 +102,9 @@ a {
   width: min(720px, 100%);
   gap: 22px;
   padding: 28px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fffdf8;
+  background: var(--bg-surface);
 }
 
 .auth-form {
@@ -63,28 +122,27 @@ a {
   min-width: 0;
   min-height: 40px;
   padding: 8px 12px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: #242321;
-  background: #fffdf8;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   font: inherit;
 }
 
 .auth-form input:focus {
-  border-color: #8db9a4;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-focus);
+  outline: 2px solid var(--brand-tint);
 }
 
 .auth-form input:-webkit-autofill,
 .auth-form input:-webkit-autofill:hover,
 .auth-form input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #242321;
-  box-shadow: 0 0 0 1000px #fffdf8 inset;
+  -webkit-text-fill-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px var(--bg-surface) inset;
 }
 
 .auth-provider-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
 }
 
@@ -94,7 +152,7 @@ a {
 }
 
 .auth-forgot-action {
-  justify-self: start;
+  justify-self: end;
   min-height: 28px;
   padding: 0;
   font-size: 13px;
@@ -108,7 +166,7 @@ a {
 }
 
 .auth-helper-actions .quiet-action {
-  color: #75582e;
+  color: var(--amber);
 }
 
 .auth-divider {
@@ -116,7 +174,7 @@ a {
   align-items: center;
   gap: 10px;
   margin: 0;
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -124,7 +182,7 @@ a {
 .auth-divider::after {
   flex: 1;
   height: 1px;
-  background: #e3dbce;
+  background: var(--border-soft);
   content: "";
 }
 
@@ -137,10 +195,10 @@ a {
   min-width: 0;
   min-height: 36px;
   padding: 0 10px;
-  border: 1px solid #d7d0c4;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: #34302b;
-  background: #fffdf8;
+  color: var(--text-subtle);
+  background: var(--bg-surface);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -153,22 +211,22 @@ a {
 
 .auth-provider-action:hover,
 .auth-provider-action:focus-visible {
-  border-color: #75a698;
-  background: #edf4ef;
+  border-color: var(--brand-border-strong);
+  background: var(--brand-tint-2);
   outline: none;
 }
 
 .auth-provider-action:disabled {
-  color: #6d675b;
-  border-color: #e0dbd2;
-  background: #f1eee8;
+  color: var(--text-muted);
+  border-color: var(--border-strong);
+  background: var(--bg-disabled);
   cursor: not-allowed;
 }
 
 .auth-message {
   max-width: 420px;
   margin: 0;
-  color: #5f594f;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
@@ -183,13 +241,13 @@ a {
   display: grid;
   gap: 2px;
   padding: 8px;
-  border: 1px solid #ebe4d8;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .handoff-list dt {
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
 }
@@ -211,7 +269,7 @@ a {
 .onboarding-form > label:not(.checkbox-row):not(.radio-row) {
   display: grid;
   gap: 6px;
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -220,18 +278,18 @@ a {
 .onboarding-form select {
   width: 100%;
   min-height: 40px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 8px 10px;
-  color: #242321;
-  background: #fffdf8;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   font: inherit;
 }
 
 .onboarding-form input:not([type="checkbox"]):not([type="radio"]):focus,
 .onboarding-form select:focus {
-  border-color: #8db9a4;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-focus);
+  outline: 2px solid var(--brand-tint);
 }
 
 .onboarding-form fieldset {
@@ -239,7 +297,7 @@ a {
   gap: 10px;
   margin: 0;
   padding: 14px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -264,12 +322,12 @@ a {
   min-height: 18px;
   margin: 0;
   padding: 0;
-  accent-color: #2f6758;
+  accent-color: var(--brand-strong);
 }
 
 .checkbox-row span,
 .radio-row span {
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -299,7 +357,7 @@ a {
 }
 
 .meal-form > label > span {
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -308,18 +366,18 @@ a {
 .meal-form textarea {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 8px 10px;
-  color: #242321;
-  background: #fffdf8;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   font: inherit;
 }
 
 .meal-form input:not([type="file"]):focus,
 .meal-form textarea:focus {
-  border-color: #8db9a4;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-focus);
+  outline: 2px solid var(--brand-tint);
 }
 
 .meal-form textarea {
@@ -335,10 +393,10 @@ a {
   min-height: 44px;
   overflow: hidden;
   padding: 7px;
-  border: 1px dashed #b9afa1;
+  border: 1px dashed var(--border-strong);
   border-radius: 8px;
-  color: #4f4a43;
-  background: #fcfaf5;
+  color: var(--text-disabled);
+  background: var(--bg-surface-2);
   font: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -350,8 +408,8 @@ a {
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
-  color: #fff;
-  background: #2f5d50;
+  color: var(--on-brand);
+  background: var(--brand);
   font: inherit;
   cursor: pointer;
 }
@@ -362,7 +420,7 @@ a {
 }
 
 .meal-field-label {
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -382,10 +440,10 @@ a {
   justify-content: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid #b9cfc2;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  color: #2f5d50;
-  background: #edf4ef;
+  color: var(--brand-text);
+  background: var(--brand-tint-2);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -393,9 +451,9 @@ a {
 
 .meal-file-action:hover,
 .meal-file-action:focus-within {
-  border-color: #2f6758;
-  background: #dce9e2;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-strong);
+  background: var(--brand-tint);
+  outline: 2px solid var(--brand-tint);
   outline-offset: 1px;
 }
 
@@ -414,9 +472,9 @@ a {
   display: grid;
   gap: 10px;
   padding: 10px;
-  border: 1px solid #b9cfc2;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  background: #edf4ef;
+  background: var(--brand-tint-2);
 }
 
 .camera-preview {
@@ -424,7 +482,7 @@ a {
   width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: 6px;
-  background: #1e2421;
+  background: var(--bg-camera);
   object-fit: cover;
 }
 
@@ -446,9 +504,9 @@ a {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid #ebe4d8;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .source-preview-frame {
@@ -457,10 +515,10 @@ a {
   aspect-ratio: 1;
   place-items: center;
   overflow: hidden;
-  border: 1px solid #e1d8ca;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #5f5951;
-  background: #f1ede5;
+  color: var(--text-muted);
+  background: var(--bg-placeholder);
   font-size: 12px;
   line-height: 1.25;
   text-align: center;
@@ -483,7 +541,7 @@ a {
 }
 
 .source-list-copy small {
-  color: #69645c;
+  color: var(--text-muted);
 }
 
 .source-list-actions {
@@ -521,15 +579,23 @@ a {
   }
 }
 
+/* One navigation at every width: a fixed bottom bar, five equal-width items, the
+   center 新增 raised as a circle (ADR 0006). The item columns are capped so a
+   wide window centers the five tabs instead of stretching them across it. */
 .bottom-nav {
   position: fixed;
   z-index: 40;
   inset: auto 0 0 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  height: 68px;
-  border-top: 1px solid #ddd6ca;
-  background: #f6f1e7;
+  grid-template-columns: repeat(5, minmax(0, 148px));
+  justify-content: center;
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid var(--border);
+  background: var(--bg-nav);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.03);
 }
 
 .brand {
@@ -549,15 +615,13 @@ a {
   flex: 0 0 auto;
   place-items: center;
   border-radius: 8px;
-  color: #fff;
-  background: #2f5d50;
+  color: var(--on-brand);
+  background: var(--brand);
 }
 
 .brand-name,
 .brand-caption,
 .eyebrow,
-.summary-card p,
-.summary-card span,
 .panel-copy,
 .settings-list dt,
 .settings-list dd {
@@ -569,9 +633,8 @@ a {
 }
 
 .brand-caption,
-.summary-card span,
 .settings-list dd {
-  color: #514c45;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -581,15 +644,13 @@ a {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 3px;
-  padding: 6px 4px 8px;
+  padding: 0 4px;
   border: 0;
-  color: #433e37;
+  border-radius: 0;
+  color: var(--text-muted);
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1.1;
-  text-align: center;
+  transition: color 0.15s ease;
 }
 
 .nav-icon {
@@ -597,6 +658,27 @@ a {
   place-items: center;
   width: 26px;
   height: 26px;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.nav-item:hover .nav-icon {
+  transform: translateY(-2px);
+}
+
+/* The bar shows icons only — a caption under one item out of five read as a
+   missing label rather than a label — so the caption carries the item's name
+   for assistive tech and takes no space in the row. */
+.nav-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .visually-hidden {
@@ -624,8 +706,8 @@ a {
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  color: #fff;
-  background: #9b2c2c;
+  color: var(--on-brand);
+  background: var(--danger);
   font-size: 11px;
   font-weight: 760;
   line-height: 1;
@@ -634,52 +716,63 @@ a {
 .nav-item.active,
 .nav-item:hover,
 .nav-item:focus-visible {
-  color: #173f36;
+  color: var(--brand-active);
+  background: var(--brand-tint-2);
   outline: none;
 }
 
 .nav-item.active .nav-icon {
-  color: #2f5d50;
-}
-
-.nav-create {
-  padding-top: 18px;
+  color: var(--brand-text);
 }
 
 .nav-create .nav-icon {
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  width: 46px;
-  height: 46px;
-  margin-left: -23px;
-  border-radius: 50%;
-  color: #fff;
-  background: #2f5d50;
-  box-shadow: 0 3px 8px rgba(47, 93, 80, 0.35);
+  position: relative;
+  color: var(--on-brand);
 }
 
-.nav-create.active .nav-icon,
-.nav-create:hover .nav-icon,
-.nav-create:focus-visible .nav-icon {
-  background: #173f36;
+/* The raised circle is painted around the icon rather than replacing its box, so
+   growing or lifting it never pushes the caption off the shared baseline. */
+.nav-create .nav-icon::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--fab-size);
+  height: var(--fab-size);
+  transform: translate(-50%, -50%) translateY(var(--fab-raise));
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: var(--fab-shadow);
+}
+
+/* The glyph rides up with the circle so the plus stays centred in it. */
+.nav-create .nav-icon svg {
+  position: relative;
+  z-index: 1;
+  transform: translateY(var(--fab-raise));
+}
+
+.nav-create.active .nav-icon::before,
+.nav-create:hover .nav-icon::before,
+.nav-create:focus-visible .nav-icon::before {
+  background: var(--brand-hover-bg);
 }
 
 .workspace {
   display: grid;
   align-content: start;
   gap: 20px;
-  padding: 28px 28px 96px;
+  width: min(100%, 1184px);
+  margin: 0 auto;
+  /* The bottom bar is fixed at every width, and the raised 新增 circle breaks
+     its top edge, so the clearance covers the bar plus that overhang. */
+  padding: 28px 32px 96px;
 }
 
-/* 新增 voice-capture route: a fixed, non-scrolling screen like the
-   wireframe — progress at top, mic stage centered, actions at the bottom. */
 .workspace-voice {
-  height: 100dvh;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 20px;
 }
 
 .workspace-voice .page-header .ai-mode-switch {
@@ -694,31 +787,25 @@ a {
 }
 
 .workspace-voice .capture-layout {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .workspace-voice .ai-ledger-panel {
-  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .workspace-voice .mode-b-panel {
-  flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 
-/* Mode A suggestion list scrolls internally so the page never moves. */
 .workspace-voice .ai-suggestions {
   min-height: 0;
-  overflow-y: auto;
 }
 
 .page-header {
@@ -747,7 +834,7 @@ a {
 }
 
 .eyebrow {
-  color: #75582e;
+  color: var(--amber);
   font-size: 12px;
   font-weight: 760;
   letter-spacing: 0;
@@ -773,7 +860,7 @@ h2 {
 .lede {
   max-width: 640px;
   margin: 12px 0 0;
-  color: #5f594f;
+  color: var(--text-muted);
   line-height: 1.55;
 }
 
@@ -785,16 +872,25 @@ h2 {
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
+  font-weight: 550;
+  transition: all 0.15s ease;
 }
 
 .primary-action {
   gap: 8px;
   min-height: 42px;
-  padding: 0 16px;
-  color: #fff;
-  background: #2f5d50;
+  padding: 0 18px;
+  color: var(--on-brand);
+  background: var(--brand);
+  box-shadow: 0 2px 6px rgba(31, 122, 91, 0.25);
+}
+
+.primary-action:hover:not(:disabled) {
+  background: var(--brand-hover-bg);
+  box-shadow: 0 4px 10px rgba(31, 122, 91, 0.3);
+  transform: translateY(-1px);
 }
 
 .capture-actions {
@@ -805,8 +901,8 @@ h2 {
 }
 
 .primary-action:disabled {
-  color: #4f4a43;
-  background: #dedbd3;
+  color: var(--text-disabled);
+  background: var(--bg-disabled-2);
   cursor: not-allowed;
 }
 
@@ -814,8 +910,8 @@ h2 {
   gap: 8px;
   min-height: 38px;
   padding: 0 12px;
-  color: #2f5d50;
-  background: #dce9e2;
+  color: var(--brand-text);
+  background: var(--brand-tint);
 }
 
 .align-start {
@@ -825,21 +921,21 @@ h2 {
 .icon-button {
   width: 38px;
   height: 38px;
-  color: #2f5d50;
-  background: #edf4ef;
+  color: var(--brand-text);
+  background: var(--brand-tint-2);
 }
 
 .text-action {
   min-height: 34px;
   padding: 0 10px;
-  color: #75582e;
-  background: #f1e6d0;
+  color: var(--amber);
+  background: var(--amber-bg);
 }
 
 .text-action:hover,
 .text-action:focus-visible {
-  color: #513817;
-  outline: 2px solid #dcc78b;
+  color: var(--amber-strong);
+  outline: 2px solid var(--amber-border);
   outline-offset: 2px;
 }
 
@@ -847,7 +943,7 @@ h2 {
   min-height: 34px;
   padding: 0 8px;
   border: 0;
-  color: #75582e;
+  color: var(--amber);
   background: transparent;
   font: inherit;
   cursor: pointer;
@@ -855,8 +951,8 @@ h2 {
 
 .quiet-action:hover,
 .quiet-action:focus-visible {
-  color: #513817;
-  outline: 2px solid #dcc78b;
+  color: var(--amber-strong);
+  outline: 2px solid var(--amber-border);
   outline-offset: 2px;
 }
 
@@ -888,12 +984,12 @@ h2 {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #3b3731;
+  color: var(--text-subtle);
 }
 
 .status-item + .status-item {
   padding-left: 12px;
-  border-left: 1px solid #d8d0c3;
+  border-left: 1px solid var(--border);
 }
 
 .status-item strong {
@@ -902,19 +998,19 @@ h2 {
 }
 
 .status-item.good {
-  color: #21634f;
+  color: var(--brand-strong);
 }
 
 .status-item.neutral {
-  color: #514c45;
+  color: var(--text-muted);
 }
 
 .status-item.warn {
-  color: #75582e;
+  color: var(--amber);
 }
 
 .status-item.danger {
-  color: #9b2c2c;
+  color: var(--danger-text);
 }
 
 .route-stack {
@@ -922,29 +1018,57 @@ h2 {
   gap: 16px;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+.workspace-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding-block: 32px;
+  max-width: 560px;
 }
 
-.summary-card,
+.workspace-empty p { margin: 0; color: var(--text-secondary); }
+.workspace-empty > svg { color: var(--brand-text); }
+.ledger-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ledger-toolbar h2 span { margin-left: 8px; color: var(--text-muted); font-size: 14px; }
+.account-list li > div { display: grid; gap: 4px; min-width: 0; }
+.account-list strong { overflow-wrap: anywhere; }
+.account-setup-form { max-width: 640px; }
+.account-setup-form > .primary-action { grid-column: 1 / -1; }
+
+.settings-content .settings-preferences-block {
+  grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr);
+  align-items: start;
+  padding: 20px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.settings-content .settings-preferences-block > .eyebrow { display: none; }
+.settings-content .settings-preferences-block > fieldset { grid-column: 2; }
+.settings-content .settings-preferences-block:has(.category-list) { display: grid; grid-template-columns: 1fr; }
+.settings-content > .panel, .settings-content .settings-section > .route-stack > .panel {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+.settings-content .export-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.export-actions select { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 6px; }
+.account-page .auth-form input, .account-page .auth-provider-action { min-height: 44px; font-size: 16px; }
+.account-page .auth-form { gap: 12px; }
+.account-page .auth-form > label, .account-page .auth-password-row { margin-top: 4px; }
+.account-page .auth-provider-action { width: 100%; white-space: nowrap; }
+
 .panel,
 .action-card,
 .table-card {
-  border: 1px solid #ddd6ca;
-  border-radius: 8px;
-  background: #fffdf8;
-}
-
-.summary-card {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-}
-
-.summary-card strong {
-  font-size: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .content-grid {
@@ -966,7 +1090,7 @@ h2 {
 }
 
 .panel-copy {
-  color: #5f594f;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
@@ -974,12 +1098,12 @@ h2 {
   display: grid;
   gap: 10px;
   padding-top: 16px;
-  border-top: 1px solid #ebe4d8;
+  border-top: 1px solid var(--border-soft);
 }
 
 .portability-section h3 {
   margin: 0;
-  color: #2c2925;
+  color: var(--text-primary);
   font-size: 17px;
 }
 
@@ -1003,7 +1127,7 @@ h2 {
 }
 
 .file-picker-input:focus-visible + .file-picker-button {
-  outline: 2px solid #8db9a4;
+  outline: 2px solid var(--brand-focus);
   outline-offset: 2px;
 }
 
@@ -1014,7 +1138,7 @@ h2 {
 .file-picker-name {
   min-width: 0;
   overflow: hidden;
-  color: #69645c;
+  color: var(--text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1036,22 +1160,24 @@ h2 {
 }
 
 .account-page {
-  width: min(640px, 100%);
+  width: min(440px, 100%);
   margin-inline: auto;
 }
 
 .account-page .panel {
-  padding: 14px;
-  gap: 8px;
+  padding: 0;
+  gap: 20px;
+  border: 0;
+  background: transparent;
 }
 
 .account-page .primary-action {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .account-page-form {
-  width: min(520px, 100%);
-  max-width: 520px;
+  width: 100%;
+  max-width: 440px;
 }
 
 .auth-password-row {
@@ -1082,14 +1208,14 @@ h2 {
   padding: 0;
   border: 0;
   border-radius: 6px;
-  color: #69645c;
+  color: var(--text-muted);
   background: transparent;
   cursor: pointer;
 }
 
 .password-toggle:hover {
-  color: #2f2b26;
-  background: #f0eadf;
+  color: var(--text-primary);
+  background: var(--bg-surface-3);
 }
 
 .account-storage-status {
@@ -1097,16 +1223,16 @@ h2 {
   gap: 4px;
   margin: 0;
   padding: 12px;
-  border: 1px solid #b9d8c9;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  color: #285447;
-  background: #edf4ef;
+  color: var(--brand-strong);
+  background: var(--brand-tint-2);
   font: inherit;
   text-align: left;
 }
 
 .account-storage-status span {
-  color: #5f594f;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -1117,14 +1243,14 @@ h2 {
   min-width: 0;
   margin: 0;
   padding: 12px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .linked-identities legend {
   padding: 0;
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1149,15 +1275,15 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #4c4740;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
 .identity-badge {
   padding: 2px 8px;
   border-radius: 999px;
-  color: #285447;
-  background: #edf4ef;
+  color: var(--brand-strong);
+  background: var(--brand-tint-2);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1168,54 +1294,153 @@ h2 {
   gap: 16px;
 }
 
-.settings-account-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
-  border: 1px solid #c8ddd2;
-  border-radius: 8px;
-  background: #f2f7f3;
+.settings-content {
+  min-width: 0;
+  max-width: 1080px;
 }
 
-.settings-account-entry h2,
-.settings-account-entry p {
+.settings-content > .panel,
+.settings-content > .settings-preferences-block {
+  width: 100%;
+}
+
+.settings-content .auth-form {
+  max-width: 460px;
+}
+
+.overview-page {
+  max-width: 1080px;
+}
+
+.ledger-page {
+  max-width: 1120px;
+}
+
+.settings-section {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.settings-preferences-block {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.settings-preferences-block h2 {
   margin: 0;
 }
 
-.settings-account-entry h2 {
-  margin-top: 3px;
-  font-size: 18px;
+.category-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.settings-account-entry > div > p:last-child {
-  margin-top: 5px;
-  color: #5f594f;
-  line-height: 1.45;
+.category-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
 }
 
-.settings-account-entry .secondary-action {
-  flex: 0 0 auto;
+.category-list-name {
+  font-weight: 700;
+}
+
+.category-list-count {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.category-list-builtin {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.category-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.category-row-actions .text-action {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.category-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-add-form label {
+  flex: 0 0 100%;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.category-add-form input {
+  min-height: 36px;
+  min-width: 0;
+  flex: 1 1 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  font: inherit;
+}
+
+.category-edit-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.category-edit-row input {
+  min-width: 0;
+  flex: 1 1 140px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  font: inherit;
 }
 
 .settings-tabs {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #ece6dc;
+  background: var(--bg-surface-3);
 }
 
 .settings-tab {
-  flex: 1 1 180px;
   min-height: 40px;
   padding: 0 14px;
   border: 0;
   border-radius: 6px;
-  color: #4c4740;
+  color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -1225,8 +1450,8 @@ h2 {
 .settings-tab.active,
 .settings-tab:hover,
 .settings-tab:focus-visible {
-  color: #173f36;
-  background: #d8e5de;
+  color: var(--brand-active);
+  background: var(--brand-tint-2);
   outline: none;
 }
 
@@ -1249,64 +1474,114 @@ h2 {
   align-self: start;
 }
 
-.report-list {
+/* One account per row, with the same four figures in the same order, so the
+   numbers are comparable straight down a column under the 帳戶／幣別 header. */
+.account-overview {
   display: grid;
-  gap: 10px;
+  min-width: 0;
 }
 
-.report-row {
+.account-overview-head,
+.account-overview-row {
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr);
-  gap: 18px;
-  align-items: center;
-  padding: 12px 0;
-  border-top: 1px solid #ebe4d8;
+  grid-template-columns: minmax(150px, 0.9fr) repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
 }
 
-.report-row:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.report-row > div:first-child {
-  display: grid;
-  gap: 4px;
-}
-
-.report-row > div:first-child span {
-  color: #6e675c;
+.account-overview-head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
-.report-row dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
+.account-overview-head span:not(:first-child) {
+  text-align: right;
 }
 
-.report-row dl div {
+.account-overview-list {
+  display: grid;
+  min-width: 0;
+}
+
+.account-overview-row {
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.account-overview-identity {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
-.report-row dt {
-  color: #6e675c;
-  font-size: 13px;
+.account-overview-identity strong {
+  overflow-wrap: anywhere;
 }
 
-.report-row dd {
+.account-overview-identity span {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.account-overview-metrics {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+}
+
+.account-overview-metrics div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-overview-metrics dd {
   margin: 0;
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* On desktop the column names come from the header row above, so each row
+   keeps its labels for assistive technology only instead of printing them
+   again next to every figure. */
+.account-overview-metrics dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.account-overview-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 0 0;
+  color: var(--text-muted);
 }
 
 .draft-summary {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid #ebe4d8;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  color: #3b3731;
-  background: #fcfaf5;
+  color: var(--text-subtle);
+  background: var(--bg-surface-2);
   line-height: 1.4;
 }
 
@@ -1320,7 +1595,7 @@ h2 {
   display: grid;
   gap: 14px;
   padding: 2px 0 4px;
-  border-bottom: 1px solid #ddd6ca;
+  border-bottom: 1px solid var(--border);
 }
 
 .capture-start-heading {
@@ -1335,15 +1610,9 @@ h2 {
   font-size: 24px;
 }
 
-.capture-start-detail {
-  margin: 0;
-  color: #69645c;
-  line-height: 1.45;
-}
-
 .capture-intent-picker {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1355,10 +1624,10 @@ h2 {
   justify-content: center;
   gap: 7px;
   padding: 8px 10px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #4c4740;
-  background: #fffdf8;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -1374,9 +1643,9 @@ h2 {
 .capture-intent-button:hover,
 .capture-intent-button:focus-visible,
 .capture-intent-button.selected {
-  border-color: #8db9a4;
-  color: #173f36;
-  background: #dce9e2;
+  border-color: var(--brand-focus);
+  color: var(--brand-active);
+  background: var(--brand-tint);
   outline: none;
 }
 
@@ -1396,7 +1665,7 @@ h2 {
 }
 
 .draft-form span {
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1406,11 +1675,11 @@ h2 {
 .draft-form textarea {
   width: 100%;
   min-height: 40px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 8px 10px;
-  color: #242321;
-  background: #fffdf8;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   font: inherit;
 }
 
@@ -1422,8 +1691,8 @@ h2 {
 .draft-form input:not([type="checkbox"]):not([type="radio"]):focus,
 .draft-form select:focus,
 .draft-form textarea:focus {
-  border-color: #8db9a4;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-focus);
+  outline: 2px solid var(--brand-tint);
 }
 
 .full-span {
@@ -1432,13 +1701,13 @@ h2 {
 
 .form-error {
   margin: 0;
-  color: #a43d2f;
+  color: var(--danger-text);
   font-weight: 700;
 }
 
 .form-success {
   margin: 0;
-  color: #21634f;
+  color: var(--brand-strong);
   font-weight: 700;
 }
 
@@ -1447,14 +1716,14 @@ h2 {
   gap: 4px;
   margin: 0 0 12px;
   padding: 12px;
-  border: 1px solid #e5c46d;
+  border: 1px solid var(--amber-border);
   border-radius: 8px;
-  color: #66501f;
-  background: #fff9e9;
+  color: var(--amber-strong);
+  background: var(--amber-bg);
 }
 
 .account-required strong {
-  color: #3b3120;
+  color: var(--amber-strong);
 }
 
 .draft-form .checkbox-field {
@@ -1478,7 +1747,7 @@ h2 {
 
 .draft-form .checkbox-row span,
 .draft-form .radio-row span {
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -1488,13 +1757,29 @@ h2 {
   gap: 10px;
   margin: 0;
   padding: 14px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+/* Override the generic fieldset border/padding for entry-details and
+   recurrence-control, which should be borderless grid containers (not
+   visually boxed sections). */
+.draft-form .entry-details {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.draft-form .recurrence-control {
+  padding: 6px 0 0;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
 }
 
 .draft-form fieldset legend {
   padding: 0 6px;
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1516,6 +1801,27 @@ h2 {
 
 .field-control-row .icon-button {
   flex: 0 0 auto;
+}
+
+/* The quick-adjust steps sit in the field's title row, right next to the
+   label, instead of stacking below the input. */
+.amount-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.amount-head > label {
+  flex: 0 0 auto;
+}
+
+.amount-head .amount-currency {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .amount-control {
@@ -1540,33 +1846,29 @@ h2 {
 }
 
 .amount-steps {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-}
-
-.amount-steps.positive-only {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .amount-step {
   min-width: 0;
-  min-height: 42px;
-  padding: 0 2px;
-  border: 1px solid #d7cec1;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  color: #2f5d50;
-  background: #fffdf8;
+  color: var(--brand-text);
+  background: var(--bg-surface);
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .amount-step:disabled {
-  border-color: #e5dfd5;
-  color: #5e5a54;
-  background: #f5f2ec;
+  border-color: var(--border-soft);
+  color: var(--text-muted);
+  background: var(--bg-page);
   cursor: not-allowed;
 }
 
@@ -1575,17 +1877,17 @@ h2 {
   align-items: center;
   min-height: 40px;
   padding: 8px 12px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: #69645c;
-  background: #f2f0ea;
+  color: var(--text-muted);
+  background: var(--bg-surface-3);
   font: inherit;
 }
 
 .amount-step:hover,
 .amount-step:focus-visible {
-  border-color: #8db9a4;
-  background: #edf4ef;
+  border-color: var(--brand-focus);
+  background: var(--brand-tint-2);
   outline: 0;
 }
 
@@ -1594,9 +1896,9 @@ h2 {
   flex-wrap: wrap;
   gap: 3px;
   padding: 3px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .segmented-fieldset {
@@ -1609,30 +1911,52 @@ h2 {
 
 .segmented-fieldset legend {
   padding: 0;
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
 
 .recurrence-control {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   min-width: 0;
-  padding: 12px 0 0;
+  padding: 6px 0 0;
   border: 0;
-  border-top: 1px solid #e2d9cb;
+  border-top: 1px solid var(--border);
 }
 
 .recurrence-control legend {
+  grid-column: 1 / -1;
   padding: 0;
-  color: #4c4740;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
 
-.recurrence-control > label:not(.checkbox-field) {
-  display: grid;
-  gap: 6px;
+/* The concrete next-cycle date sits inline in the section title once the
+   controls are expanded, so the schedule is visible without a duplicate card. */
+.recurrence-legend-date {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 記錄行為 label spans both columns on top; the select and the
+   amount-may-vary checkbox share the row below, so their text baselines
+   align without stacking the label above the select. */
+.recurrence-behavior-label {
+  grid-column: 1 / -1;
+}
+
+.recurrence-behavior {
+  min-width: 0;
+}
+
+.recurrence-control > .recurrence-summary,
+.recurrence-control > .field-help,
+.recurrence-control > .collapse-recurrence {
+  grid-column: 1 / -1;
 }
 
 .segmented-control label {
@@ -1643,7 +1967,7 @@ h2 {
   min-height: 34px;
   padding: 0 10px;
   border-radius: 6px;
-  color: #4c4740;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -1658,12 +1982,12 @@ h2 {
 }
 
 .segmented-control label.active {
-  color: #173f36;
-  background: #a9cbb8;
+  color: var(--brand-active);
+  background: var(--brand-tint-3);
 }
 
 .segmented-control label:focus-within {
-  outline: 2px solid #8db9a4;
+  outline: 2px solid var(--brand-focus);
   outline-offset: 1px;
 }
 
@@ -1672,7 +1996,7 @@ h2 {
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
-  color: #4c4740;
+  color: var(--text-secondary);
   background: transparent;
   font: inherit;
   cursor: pointer;
@@ -1695,9 +2019,9 @@ h2 {
 .quick-account {
   margin-top: 8px;
   padding: 12px;
-  border: 1px solid #bad7c7;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  background: #f4fbf7;
+  background: var(--brand-tint-3);
 }
 
 .quick-account-backdrop {
@@ -1717,7 +2041,7 @@ h2 {
   overflow-y: auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 20px;
-  border-color: #9fcab6;
+  border-color: var(--brand-focus);
   box-shadow: 0 20px 60px rgb(36 35 33 / 24%);
 }
 
@@ -1728,8 +2052,8 @@ h2 {
 }
 
 .quick-account > label:not(.checkbox-row) > span,
-.quick-account .amount-field > label > span {
-  color: #4c4740;
+.quick-account .amount-field .amount-head > label > span {
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1739,18 +2063,18 @@ h2 {
   width: 100%;
   min-width: 0;
   min-height: 40px;
-  border: 1px solid #d7cec1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 8px 10px;
-  color: #242321;
-  background: #fffdf8;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   font: inherit;
 }
 
 .quick-account input:not([type="checkbox"]):focus,
 .quick-account select:focus {
-  border-color: #8db9a4;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-focus);
+  outline: 2px solid var(--brand-tint);
 }
 
 .quick-account .amount-field {
@@ -1772,13 +2096,13 @@ h2 {
 
 .quick-account-heading h3 {
   margin: 0;
-  color: #242321;
+  color: var(--text-primary);
   font-size: 22px;
 }
 
 .quick-account-heading p {
   margin: 0;
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -1804,14 +2128,14 @@ h2 {
 
 .manual-empty-state p {
   max-width: 560px;
-  color: #69645c;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
 .field-help,
 .quick-account-error {
   margin: 0;
-  color: #75582e;
+  color: var(--amber);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -1826,23 +2150,34 @@ h2 {
   border: 0;
 }
 
-.draft-form > .entry-date-field,
-.draft-form > .time-precision-fields {
-  order: 0;
+/* Amount field spans full width in the entry-details grid so the
+   quick-step buttons have room and the currency badge sits inline. */
+.entry-details > .amount-field {
+  grid-column: 1 / -1;
 }
 
-.draft-form > .entry-kind-field {
-  order: 1;
+/* Item name sits alone in the 2-col grid (paired with nothing) — make it
+   full-span so the checkbox label has room and no empty half remains. */
+.entry-details .entry-item-name-field {
+  grid-column: 1 / -1;
+}
+
+.draft-form > .entry-date-field,
+.draft-form > .entry-kind-field,
+.draft-form > .time-precision-fields {
+  order: 0;
 }
 
 .draft-form > .entry-details,
 .draft-form > .entry-details-locked {
   order: 2;
+  margin-top: 4px;
 }
 
 .draft-form > .entry-account-field,
 .draft-form > .entry-account-last {
-  order: 3;
+  order: 1;
+  grid-column: 1 / -1;
 }
 
 .draft-form.needs-account > .entry-account-field {
@@ -1870,14 +2205,14 @@ h2 {
   gap: 4px;
   grid-column: 1 / -1;
   padding: 14px;
-  border: 1px solid #e5c46d;
+  border: 1px solid var(--amber-border);
   border-radius: 8px;
-  color: #66501f;
-  background: #fff9e9;
+  color: var(--amber-strong);
+  background: var(--amber-bg);
 }
 
 .entry-details-locked strong {
-  color: #3b3120;
+  color: var(--amber-strong);
 }
 
 .quick-category {
@@ -1886,14 +2221,14 @@ h2 {
   gap: 8px;
   margin-top: 8px;
   padding: 12px;
-  border: 1px solid #bad7c7;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  background: #f4fbf7;
+  background: var(--brand-tint-3);
 }
 
 .quick-account-error {
   grid-column: 1 / -1;
-  color: #9b2c2c;
+  color: var(--danger-text);
 }
 
 .quick-account-actions {
@@ -1907,9 +2242,9 @@ h2 {
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 1px solid #d8b66a;
+  border: 1px solid var(--amber-border);
   border-radius: 8px;
-  background: #fffaf0;
+  background: var(--amber-bg);
 }
 
 .planned-actions {
@@ -1930,9 +2265,9 @@ h2 {
   display: grid;
   gap: 10px;
   padding: 16px;
-  border: 1px solid #dcc78b;
+  border: 1px solid var(--amber-border);
   border-radius: 8px;
-  background: #fffdf8;
+  background: var(--bg-surface);
 }
 
 .draft-list-heading,
@@ -1944,42 +2279,514 @@ h2 {
 }
 
 .draft-list-heading > span {
-  color: #75582e;
+  color: var(--amber);
   font-size: 13px;
   font-weight: 700;
 }
 
 .draft-card {
   padding: 12px;
-  border: 1px solid #ebe4d8;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .ledger-record-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* The meta column outranks the title column: the row exists to keep date,
+     account, and category readable, so the title is what gives way first.
+     The status badge has its own track instead of eating the meta width.
+     The meta track is weighted above the name (1.3fr vs 1fr) so the short
+     account · category line fits whole at the tightest one-line width (it
+     needs 113px; see docs/testing/visual-regression.md) with margin left for
+     the platform the CI sweep runs on, while a long name truncates first. */
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.7fr) auto auto auto;
+  grid-template-areas: "date name meta status amount actions";
   align-items: center;
+  /* The gap and the row's own inset are kept tight: each pixel here is taken
+     from the column tracks, and the row was tuned so the account · category
+     line just fits — on Linux, where the CJK + latin text renders ~10px wider
+     than on Windows, as well as on Windows (the CI geometry sweep runs on
+     Linux). The hover affordance is the background and border below, not
+     horizontal breathing room the compact layout cannot spare. */
+  column-gap: 4px;
+  min-height: 38px;
+  padding: 4px 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  transition: all 0.15s ease;
 }
 
-.ledger-record-card .record-summary {
+.ledger-record-card:hover {
+  background: var(--bg-surface-2);
+  border-color: var(--border-soft);
+}
+
+.ledger-record-card .record-date {
+  grid-area: date;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ledger-record-card .record-name {
+  grid-area: name;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.ledger-record-card .record-item {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Body text, the row's own reading size. See the type scale note above the
+     layout tiers: the floor is what decides how much width the row needs. */
+  font-size: 16px;
+  /* The row's primary field, and the only text in it allowed the primary
+     colour: what was bought is what the row exists to say. This has to be
+     stated here — without it the title inherits the muted colour from
+     `.draft-card span`, which left the least important relationship in the row
+     inverted (dim title, brightest amount). */
+  color: var(--text-primary);
+  /* Explicit rather than the `<strong>` default, which is `bolder` and would
+     climb if an ancestor ever became bold. */
+  font-weight: 700;
+}
+
+.ledger-record-card .record-merchant {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.ledger-record-card .record-amount {
+  grid-area: amount;
+  justify-self: end;
   min-width: 0;
 }
 
-.ledger-record-card .record-summary strong {
-  overflow-wrap: anywhere;
+.ledger-record-card .record-amount strong {
+  white-space: nowrap;
+  /* The number the row reports is body text, like the item it belongs to. */
+  font-size: 16px;
+  /* Positioned, not dominant. The amount is a number the user came to read, so
+     it keeps comfortable contrast — one tier below the item and clearly above
+     the date / merchant / account line, rather than the brightest text on the
+     page as it was when the title was muted. */
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
-.ledger-record-card .record-detail {
-  overflow-wrap: anywhere;
+.ledger-record-card .record-meta {
+  grid-area: meta;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.ledger-record-card .record-detail-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.ledger-record-card .record-status {
+  grid-area: status;
+  justify-self: end;
+  padding: 0 5px;
+  border: 1px solid var(--amber-border);
+  border-radius: 999px;
+  color: var(--amber-strong);
+  background: var(--amber-bg);
+  font-size: 14px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .ledger-record-card .record-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
   justify-content: flex-end;
+  width: auto;
+  flex-wrap: nowrap;
 }
 
-.ledger-record-card .record-actions > button {
-  flex: 0 1 auto;
+.ledger-record-card .record-state-label {
+  grid-area: actions;
+  justify-self: end;
+  font-size: 14px;
+}
+
+.ledger-record-card .icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ledger-record-card .icon-action:hover,
+.ledger-record-card .icon-action.active {
+  color: var(--text-strong);
+  background: var(--bg-surface);
+}
+
+/* The row's type scale is what decides these tiers, not a round number. The item
+   and the amount are body text at 16px; the date, merchant, account · category,
+   badge, and undo label are auxiliary at 14px (plan §5.2). Measured at those
+   sizes a row needs roughly 450px of container to hold one line, and roughly
+   300px to keep the account · category line worth reading once it moves to a row
+   of its own.
+
+   Below 300px the amount takes a line rather than squeezing the name, the
+   merchant, and the account into stubs: the trade is row height for legibility,
+   which is the point of the type floor. A 320px phone leaves the ledger section
+   262px, so that trade is what the narrowest supported screen gets.
+
+   The queries are on the row's container, so a narrow panel on a wide screen and
+   a narrow phone behave the same way. */
+
+/* Two lines: the meta moves under the name. The column gap is tightened from
+   the one-line tier's value: below this width every pixel between columns is
+   taken from the account · category line, which on the CI (Linux) metrics is
+   the widest the row has to hold. */
+@container ledger-rows (max-width: 449px) {
+  .ledger-record-card {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "date name amount actions"
+      "date meta status actions";
+    row-gap: 1px;
+    column-gap: 2px;
+  }
+}
+
+/* Three lines: the amount moves to its own row, so the name and the account ·
+   category keep the full column instead of collapsing to a few characters. */
+@container ledger-rows (max-width: 299px) {
+  .ledger-record-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date name   actions"
+      "date meta   status"
+      "date amount amount";
+    row-gap: 1px;
+    column-gap: 2px;
+  }
+}
+
+/* Engines without container queries use the viewport as a coarser proxy for
+   the same intent — set a little wide, so the fallback lands on the roomier
+   layout rather than the cramped one — so narrow screens do not fall back to
+   the clipped row. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 520px) {
+    .ledger-record-card {
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-areas:
+        "date name amount actions"
+        "date meta status actions";
+      row-gap: 1px;
+      column-gap: 2px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .ledger-record-card {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "date name   actions"
+        "date meta   status"
+        "date amount amount";
+      row-gap: 1px;
+      column-gap: 2px;
+    }
+  }
+}
+
+.ledger-history {
+  display: grid;
+  gap: 12px;
+}
+
+.ledger-kind-section {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  /* Rows size themselves against this container instead of the viewport: the
+     ledger also renders inside narrow panels on wide screens. */
+  container: ledger-rows / inline-size;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.ledger-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  /* The summary wraps instead of clipping: it carries one total per currency,
+     and an ellipsised summary drops whole currencies rather than shortening
+     them. Wrapping also keeps its min-content width small — a nowrap summary
+     used to set the min-content of the section's only grid column, which
+     pushed every row out of the card on narrow containers. */
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.ledger-section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ledger-section-heading > span {
+  min-width: 0;
+  /* Break at separators, never inside a word unless a single one cannot fit;
+     currency codes and totals stay whole. */
+  overflow-wrap: break-word;
+  white-space: normal;
+  /* Right-aligned on its own line once the heading wraps. */
+  margin-left: auto;
+  text-align: right;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ledger-section-rows {
+  display: grid;
+  gap: 4px;
+}
+
+.ledger-filter-bar {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.ledger-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ledger-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ledger-search:focus-within {
+  border-color: var(--brand-focus);
+  background: var(--bg-surface);
+}
+
+.ledger-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.ledger-search input:focus {
+  outline: none;
+}
+
+.filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 170px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-button:hover,
+.filter-button.active {
+  color: var(--amber-strong);
+  border-color: var(--amber-border);
+  background: var(--amber-bg);
+}
+
+.filter-button-label {
+  white-space: nowrap;
+}
+
+.filter-button-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.filter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-clear:hover {
+  color: var(--text-strong);
+}
+
+.ledger-account-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 1px;
+  scrollbar-width: none;
+}
+
+.ledger-account-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.account-chip {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.account-chip:hover,
+.account-chip.active {
+  color: var(--amber-strong);
+  border-color: var(--amber-border);
+  background: var(--amber-bg);
+  font-weight: 700;
+}
+
+.ledger-select {
+  position: relative;
+}
+
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  max-width: min(300px, 92vw);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+}
+
+.filter-popover-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.filter-popover > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filter-popover > button:hover,
+.filter-popover > button.selected {
+  background: var(--bg-surface);
+  color: var(--amber-strong);
+}
+
+.filter-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-option-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.filter-popover-empty {
+  margin: 4px 2px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .draft-card div,
@@ -1990,7 +2797,7 @@ h2 {
 
 .draft-card span,
 .draft-amount span {
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -2008,10 +2815,10 @@ h2 {
 .new-entity-badge {
   margin-left: 4px;
   padding: 1px 6px;
-  border: 1px solid #c98a1e;
+  border: 1px solid var(--amber-border);
   border-radius: 999px;
-  color: #8a5a00;
-  background: #fdf3e0;
+  color: var(--amber-strong);
+  background: var(--amber-bg);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
@@ -2026,9 +2833,9 @@ h2 {
   max-width: none;
   margin: 8px 0;
   padding: 12px 14px;
-  border: 1px solid #c8ddd2;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  background: #f2f7f3;
+  background: var(--brand-tint-3);
 }
 
 .ask-new-entities p {
@@ -2051,10 +2858,10 @@ h2 {
 .inline-message {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid #8db9a4;
+  border: 1px solid var(--brand-focus);
   border-radius: 8px;
-  color: #2f5d50;
-  background: #f4faf6;
+  color: var(--brand-text);
+  background: var(--brand-tint-3);
 }
 
 .sync-issues {
@@ -2068,7 +2875,7 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #ebe4d8;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .sync-issue:last-child {
@@ -2081,44 +2888,289 @@ h2 {
 }
 
 .sync-issue span {
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.35;
 }
 
 .record-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--brand-focus);
+  border-radius: 8px;
+  background: var(--brand-tint-3);
+}
+
+/* The editor floats above the list instead of replacing the row, so the
+   history stays put while editing. */
+.editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  overflow-y: auto;
+  /* Even on a very short viewport the fallback overlay scroll must never
+     show a scrollbar — the dialog should look like a fixed window. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.editor-backdrop::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+  /* Centered via margin auto: when the form is taller than a short viewport
+     the whole overlay scrolls as one unit (no inner scrollbar in a box). */
+  margin: auto;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-surface-2);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
+}
+
+.editor-panel-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-panel-header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.editor-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-panel .record-editor {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+/* The dialog sizes to its content and never scrolls internally; the overlay
+   scrolls instead when the form is taller than a short viewport. */
+.record-editor-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #8db9a4;
+  gap: 10px;
+  padding: 2px;
+}
+
+/* The amount field keeps its quick-step buttons on one row, so it spans the
+   full width; category/merchant/item/reason pair up two per row. */
+.record-editor-fields > .amount-field {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 380px) {
+  .record-editor-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Fixed action footer: save/cancel always stay visible while the fields
+   scroll, instead of being buried at the bottom of the content. */
+.record-editor-footer {
+  display: grid;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #f4faf6;
+  background: var(--bg-surface-2);
+  box-shadow: 0 -6px 16px rgb(0 0 0 / 0.35);
+}
+
+.record-editor-footer .record-editor-actions {
+  justify-content: space-between;
+}
+
+.record-editor-footer .primary-action {
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+/* One-line entry points inside the form (turn a record recurring / complete
+   details for unresolved expenses); expand into the full controls. */
+.set-recurrence-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  color: var(--brand-text);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Compact summary of a recurring record's cycle: current behavior plus the
+   pause / cancel / edit controls, so the dialog stays short enough to fit
+   without internal scrolling. */
+
+.recurrence-summary {
+  display: grid;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.recurrence-summary .secondary-action,
+.recurrence-summary .text-action {
+  min-height: 30px;
+}
+
+/* The recurring schedule line shows the concrete next occurrence (frequency +
+   next date + next amount) — the info users actually scan for — instead of
+   abstract settings labels. */
+.recurrence-summary-schedule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recurrence-summary-schedule strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.recurrence-paused-badge {
+  padding: 1px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  background: var(--bg-surface-2);
+}
+
+.recurrence-summary-text {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.recurrence-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.set-recurrence-toggle:hover,
+.set-recurrence-toggle:focus-visible {
+  border-color: var(--brand-focus);
+  background: var(--brand-tint-3);
+}
+
+/* Collapse link at the bottom of the expanded cycle settings preview. */
+.collapse-recurrence {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.collapse-recurrence:hover,
+.collapse-recurrence:focus-visible {
+  color: var(--brand-text);
+  text-decoration: underline;
+}
+
+.record-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.confirm-dialog-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .record-editor label {
   display: grid;
   gap: 6px;
-  color: #4c4a45;
+  color: var(--text-subtle);
   font-size: 13px;
   font-weight: 700;
 }
 
 .record-editor input,
+.record-editor select,
 .record-editor textarea {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   padding: 8px 10px;
-  border: 1px solid #d8d1c5;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fffdf8;
-  color: #282725;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   font: inherit;
 }
 
 .record-editor textarea {
-  min-height: 70px;
-  resize: vertical;
+  min-height: 52px;
+  resize: none;
+}
+
+/* Checkboxes inside the editor must not inherit the text-input styling
+   (width: 100% / min-height: 40px / padding) that .record-editor input
+   applies — otherwise they render as a full-width box with the label
+   text wrapped below. */
+.record-editor .checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-editor .checkbox-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  accent-color: var(--brand);
 }
 
 .voided-record {
@@ -2127,7 +3179,7 @@ h2 {
 
 .record-state-label,
 .danger-action {
-  color: #a43d2f;
+  color: var(--danger-text);
   font-weight: 700;
 }
 
@@ -2136,12 +3188,12 @@ h2 {
   gap: 6px;
   margin-top: 4px;
   padding: 8px;
-  border-left: 3px solid #8db9a4;
-  background: #f4faf6;
+  border-left: 3px solid var(--brand-focus);
+  background: var(--brand-tint-3);
 }
 
 .suggestion-label {
-  color: #21634f;
+  color: var(--brand-strong);
   font-size: 12px;
   font-weight: 760;
 }
@@ -2152,7 +3204,7 @@ h2 {
 }
 
 .suggestion-row > strong {
-  color: #48463f;
+  color: var(--text-subtle);
   font-size: 13px;
 }
 
@@ -2166,18 +3218,18 @@ h2 {
 .suggestion-clear {
   min-height: 28px;
   padding: 4px 8px;
-  border: 1px solid #b7d3c4;
+  border: 1px solid var(--brand-focus);
   border-radius: 5px;
-  background: #fffdf8;
-  color: #21634f;
+  background: var(--bg-surface);
+  color: var(--brand-strong);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
 .suggestion-clear {
-  border-color: #d9b9ae;
-  color: #a43d2f;
+  border-color: var(--danger-border);
+  color: var(--danger-text);
 }
 
 .table-row {
@@ -2193,7 +3245,7 @@ h2 {
 .table-row span,
 .table-empty {
   padding: 12px 14px;
-  border-right: 1px solid #ebe4d8;
+  border-right: 1px solid var(--border-soft);
 }
 
 .table-row span:last-child {
@@ -2201,8 +3253,8 @@ h2 {
 }
 
 .table-head {
-  color: #5f594f;
-  background: #faf7f0;
+  color: var(--text-muted);
+  background: var(--bg-surface-3);
   font-size: 12px;
   font-weight: 760;
   letter-spacing: 0;
@@ -2211,15 +3263,15 @@ h2 {
 
 .table-empty {
   padding: 12px 14px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fffdf8;
-  color: #69645c;
+  background: var(--bg-surface);
+  color: var(--text-muted);
 }
 
 .table-card .table-empty {
   min-width: 1640px;
-  border-top: 1px solid #ebe4d8;
+  border-top: 1px solid var(--border-soft);
 }
 
 .action-card {
@@ -2229,30 +3281,30 @@ h2 {
   gap: 12px;
   min-height: 94px;
   padding: 14px;
-  color: #2c2925;
+  color: var(--text-primary);
   text-align: left;
 }
 
 .action-card.planned,
 .action-card.unavailable {
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .action-card.primary-card {
-  border-color: #bad7c7;
-  background: #f4fbf7;
+  border-color: var(--brand-focus);
+  background: var(--brand-tint-3);
   cursor: pointer;
 }
 
 .action-card.primary-card:hover,
 .action-card.primary-card:focus-visible {
-  outline: 2px solid #8db9a4;
+  outline: 2px solid var(--brand-focus);
   outline-offset: 2px;
 }
 
 .action-card.primary-card em {
-  color: #1d5145;
-  background: #dce9e2;
+  color: var(--brand-strong);
+  background: var(--brand-tint);
 }
 
 button.action-card.unavailable {
@@ -2266,7 +3318,7 @@ button.action-card.unavailable {
 }
 
 .action-card small {
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -2275,8 +3327,8 @@ button.action-card.unavailable {
   justify-self: start;
   padding: 2px 7px;
   border-radius: 999px;
-  color: #75582e;
-  background: #f1e6d0;
+  color: var(--amber);
+  background: var(--amber-bg);
   font-size: 11px;
   font-style: normal;
   font-weight: 760;
@@ -2303,9 +3355,9 @@ button.action-card.unavailable {
   gap: 10px 18px;
   margin: 0;
   padding: 12px 14px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #faf7f0;
+  background: var(--bg-surface-3);
 }
 
 .entity-policy-row legend {
@@ -2321,7 +3373,7 @@ button.action-card.unavailable {
 }
 
 .entity-policy-option input {
-  accent-color: #2f6b4f;
+  accent-color: var(--brand-strong);
 }
 
 .settings-list {
@@ -2349,13 +3401,13 @@ button.action-card.unavailable {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #ebe4d8;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .account-list span {
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2364,18 +3416,12 @@ button.action-card.unavailable {
 }
 
 @media (max-width: 1100px) {
-  .app-shell {
-    align-content: start;
-    grid-template-columns: 1fr;
-  }
-
   .workspace {
-    padding: 20px 20px 92px;
+    padding: 20px 20px 96px;
   }
 
   .topbar,
-  .content-grid,
-  .summary-grid {
+  .content-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2387,26 +3433,6 @@ button.action-card.unavailable {
 }
 
 @media (max-width: 760px) {
-  .bottom-nav {
-    height: 60px;
-  }
-
-  .nav-item {
-    font-size: 11px;
-    padding: 4px 2px 6px;
-  }
-
-  .nav-create {
-    padding-top: 14px;
-  }
-
-  .nav-create .nav-icon {
-    top: -12px;
-    width: 42px;
-    height: 42px;
-    margin-left: -21px;
-  }
-
   .draft-form,
   .entry-details {
     grid-template-columns: 1fr;
@@ -2422,9 +3448,40 @@ button.action-card.unavailable {
     padding: 16px;
   }
 
-  .report-row {
-    grid-template-columns: 1fr;
+  /* Below this width five columns stop being readable, so each account becomes
+     one block: name and currency first, then the same four figures in a fixed
+     two-column grid. Nothing moves position because a figure happens to be 0. */
+  .account-overview-head {
+    display: none;
+  }
+
+  .account-overview-row {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+    padding: 16px 0;
+  }
+
+  .account-overview-metrics {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-overview-metrics div {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .account-overview-metrics dt {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    clip: auto;
+    clip-path: none;
+    overflow: visible;
+    white-space: normal;
+    color: var(--text-muted);
+    font-size: 14px;
   }
 
   .capture-start-heading {
@@ -2441,36 +3498,23 @@ button.action-card.unavailable {
   }
 
   .capture-intent-button:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .ledger-record-card {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .ledger-record-card .record-amount {
-    align-items: baseline;
-    display: flex;
-    justify-content: space-between;
-    text-align: left;
-    width: 100%;
-  }
-
-  .ledger-record-card .record-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .ledger-record-card .record-actions > button {
-    width: 100%;
-    min-height: 40px;
+    grid-column: auto;
   }
 }
 
 @media (max-width: 560px) {
+  .settings-content .settings-preferences-block { grid-template-columns: 1fr; }
+  .settings-content .settings-preferences-block > fieldset { grid-column: 1; }
+  .settings-tabs {
+    gap: 2px;
+  }
+
+  .settings-tab {
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 13px;
+  }
+
   .settings-account-entry {
     align-items: stretch;
     flex-direction: column;
@@ -2482,12 +3526,14 @@ button.action-card.unavailable {
 
   .workspace,
   .signed-out-shell {
-    padding: 10px;
+    padding: 16px;
   }
 
   .workspace {
     gap: 8px;
-    padding-bottom: 76px;
+    /* The shorthand above resets the clearance the fixed bottom bar and the raised
+       新增 circle need, so it is restored here. */
+    padding-bottom: 96px;
   }
 
   .page-header,
@@ -2508,10 +3554,6 @@ button.action-card.unavailable {
   }
 
   .planned-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .record-editor {
     grid-template-columns: 1fr;
   }
 
@@ -2559,23 +3601,6 @@ button.action-card.unavailable {
     overflow-wrap: anywhere;
   }
 
-  .ledger-record-card {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .ledger-record-card .record-amount {
-    align-items: baseline;
-    display: flex;
-    justify-content: space-between;
-    text-align: left;
-    width: 100%;
-  }
-
-  .ledger-record-card .record-actions > button {
-    flex: 1 1 0;
-  }
-
   .sync-issue {
     align-items: flex-start;
     flex-direction: column;
@@ -2598,26 +3623,35 @@ button.action-card.unavailable {
 
 .ai-ledger-panel {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .ai-ledger-form {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   max-width: 560px;
 }
 
 .ai-ledger-input {
   width: 100%;
-  min-height: 84px;
-  padding: 10px 12px;
-  border: 1px solid #d7d0c4;
-  border-radius: 8px;
-  background: #fffdf8;
-  color: #34302b;
+  min-height: 92px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   font: inherit;
+  font-size: 15px;
   line-height: 1.5;
   resize: vertical;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-ledger-input:focus {
+  border-color: var(--brand-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-tint);
 }
 
 .ai-ledger-actions {
@@ -2629,13 +3663,13 @@ button.action-card.unavailable {
 
 .ai-suggestions {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .ai-issues {
   margin: 0;
   padding-left: 18px;
-  color: #8a2f2f;
+  color: var(--danger-text);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -2648,22 +3682,22 @@ button.action-card.unavailable {
   margin-bottom: 14px;
   padding: 3px;
   border-radius: 10px;
-  background: #e7e0d3;
+  background: var(--bg-surface-3);
 }
 
 .ai-mode-tab {
   padding: 7px 14px;
   border: 0;
   border-radius: 8px;
-  color: #69645c;
+  color: var(--text-muted);
   background: transparent;
   cursor: pointer;
   font-weight: 600;
 }
 
 .ai-mode-tab.active {
-  color: #242321;
-  background: #fff;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
 }
 
@@ -2681,21 +3715,21 @@ button.action-card.unavailable {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px dashed #d8d0c0;
+  border: 1px dashed var(--border);
   border-radius: 8px;
-  background: #faf7f0;
+  background: var(--bg-surface-3);
 }
 
 .field-block.current {
-  border: 1px solid #8db9a4;
-  border-left: 4px solid #4c8f77;
-  background: #f4faf6;
+  border: 1px solid var(--brand-focus);
+  border-left: 4px solid var(--brand-border-strong);
+  background: var(--brand-tint-3);
 }
 
 .field-block.filled {
   border-style: solid;
-  border-color: #e2dbc9;
-  background: #fffdf8;
+  border-color: var(--border);
+  background: var(--bg-surface);
 }
 
 .field-block.editable {
@@ -2723,7 +3757,7 @@ button.action-card.unavailable {
 }
 
 .field-block-label {
-  color: #75582e;
+  color: var(--amber);
   font-size: 13px;
   font-weight: 700;
 }
@@ -2734,7 +3768,7 @@ button.action-card.unavailable {
 }
 
 .field-block-placeholder {
-  color: #a89c88;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2742,9 +3776,9 @@ button.action-card.unavailable {
   min-width: 0;
   width: 60%;
   padding: 6px 8px;
-  border: 1px solid #d8d0c0;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fffdf8;
+  background: var(--bg-surface);
   line-height: 1.4;
 }
 
@@ -2752,9 +3786,9 @@ button.action-card.unavailable {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #ebe4d8;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: #fcfaf5;
+  background: var(--bg-surface-2);
 }
 
 .field-block-group-heading strong {
@@ -2778,11 +3812,11 @@ button.action-card.unavailable {
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: #ddd6ca;
+  background: var(--border);
 }
 
-.mode-b-p.done { background: #2f5d50; }
-.mode-b-p.now { background: #75582e; }
+.mode-b-p.done { background: var(--brand); }
+.mode-b-p.now { background: var(--amber); }
 
 /* 已填欄位小標籤 */
 .mode-b-filled {
@@ -2800,10 +3834,10 @@ button.action-card.unavailable {
   align-items: baseline;
   gap: 5px;
   padding: 4px 11px;
-  border: 1px solid #8db9a4;
+  border: 1px solid var(--brand-focus);
   border-radius: 999px;
-  background: #dce9e2;
-  color: #2f5d50;
+  background: var(--brand-tint);
+  color: var(--brand-text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -2812,7 +3846,7 @@ button.action-card.unavailable {
 
 /* 中央主區 */
 .mode-b-stage {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -2825,7 +3859,7 @@ button.action-card.unavailable {
 
 .mode-b-step {
   margin: 0;
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 2px;
@@ -2841,7 +3875,7 @@ button.action-card.unavailable {
 
 .mode-b-hint {
   margin: 0;
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 15px;
 }
 
@@ -2857,8 +3891,11 @@ button.action-card.unavailable {
 
 .mode-b-ring {
   position: absolute;
-  inset: 4px;
-  border: 2px solid #8db9a4;
+  top: 10px;
+  left: calc(50% - 54px);
+  width: 108px;
+  height: 108px;
+  border: 2px solid var(--brand-focus);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -2878,8 +3915,8 @@ button.action-card.unavailable {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  color: #fff;
-  background: #2f5d50;
+  color: var(--on-brand);
+  background: var(--brand);
   font-size: 38px;
   cursor: pointer;
   box-shadow: 0 8px 24px rgb(47 93 80 / 0.4);
@@ -2889,7 +3926,7 @@ button.action-card.unavailable {
 .mode-b-mic:hover { transform: scale(1.04); }
 
 .mode-b-mic.listening {
-  background: #9b2c2c;
+  background: var(--danger);
   box-shadow: 0 8px 24px rgb(155 44 44 / 0.4);
   animation: mode-b-shake 0.5s ease-in-out infinite;
 }
@@ -2912,7 +3949,7 @@ button.action-card.unavailable {
   width: 5px;
   height: 8px;
   border-radius: 3px;
-  background: #9b2c2c;
+  background: var(--danger);
   animation: mode-b-bounce 1s ease-in-out infinite;
 }
 
@@ -2941,12 +3978,12 @@ button.action-card.unavailable {
 
 .mode-b-note {
   margin: 0;
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 13px;
   text-align: center;
 }
 
-.mode-b-note.listening { color: #9b2c2c; font-weight: 700; }
+.mode-b-note.listening { color: var(--danger); font-weight: 700; }
 
 /* 結果卡 */
 .mode-b-result {
@@ -2955,9 +3992,9 @@ button.action-card.unavailable {
   width: min(560px, 100%);
   align-self: center;
   padding: 18px 22px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: #fffdf8;
+  background: var(--bg-surface);
 }
 
 .mode-b-row {
@@ -2974,12 +4011,12 @@ button.action-card.unavailable {
   font-weight: 700;
 }
 
-.mode-b-tag.raw { background: #f1ece0; color: #69645c; }
+.mode-b-tag.raw { background: var(--bg-surface-3); color: var(--text-muted); }
 
 .mode-b-tag.ai {
-  border: 1px solid #8db9a4;
-  background: #dce9e2;
-  color: #2f5d50;
+  border: 1px solid var(--brand-focus);
+  background: var(--brand-tint);
+  color: var(--brand-text);
 }
 
 .mode-b-txt {
@@ -2988,29 +4025,29 @@ button.action-card.unavailable {
   overflow-wrap: anywhere;
 }
 
-.mode-b-row.ai-row .mode-b-txt { color: #2f5d50; }
+.mode-b-row.ai-row .mode-b-txt { color: var(--brand); }
 
 .mode-b-input {
   min-width: 0;
   flex: 1;
   padding: 6px 10px;
-  border: 1px solid #d8d0c0;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fffdf8;
-  color: #242321;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   font: inherit;
   font-size: 19px;
   font-weight: 600;
 }
 
 .mode-b-input:focus {
-  border-color: #8db9a4;
-  outline: 2px solid #dce9e2;
+  border-color: var(--brand-focus);
+  outline: 2px solid var(--brand-tint);
 }
 
 .mode-b-ai-note {
   margin: 0;
-  color: #69645c;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -3019,8 +4056,9 @@ button.action-card.unavailable {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
-  padding: 2px 0 6px;
+  gap: 12px;
+  padding: 8px 0 16px;
+  margin-bottom: 24px;
 }
 
 /* 摘要確認 */
@@ -3030,9 +4068,9 @@ button.action-card.unavailable {
   width: min(560px, 100%);
   align-self: center;
   padding: 22px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: #fffdf8;
+  background: var(--bg-surface);
 }
 
 .mode-b-summary h2 {
@@ -3051,13 +4089,13 @@ button.action-card.unavailable {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 4px;
-  border-bottom: 1px dashed #ddd6ca;
+  border-bottom: 1px dashed var(--border);
   font-size: 15px;
 }
 
 .mode-b-s-row:last-child { border-bottom: 0; }
 
-.mode-b-s-row dt { color: #69645c; font-weight: 600; }
+.mode-b-s-row dt { color: var(--text-muted); font-weight: 600; }
 
 .mode-b-s-row dd {
   margin: 0;
@@ -3075,9 +4113,9 @@ button.action-card.unavailable {
   width: min(560px, 100%);
   align-self: center;
   padding: 26px;
-  border: 1px solid #8db9a4;
+  border: 1px solid var(--brand-focus);
   border-radius: 14px;
-  background: #dce9e2;
+  background: var(--brand-tint);
   text-align: center;
 }
 
@@ -3085,7 +4123,65 @@ button.action-card.unavailable {
 
 .mode-b-done p {
   margin: 0;
-  color: #2f5d50;
+  color: var(--brand-text);
   font-size: 16px;
   font-weight: 700;
+}
+
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg-page: #171a1c;
+  --bg-surface: #1f2326;
+  --bg-surface-2: #262b2e;
+  --bg-surface-3: #2b3134;
+  --bg-nav: #1a1e20;
+  --bg-disabled: #262a2d;
+  --bg-placeholder: #262b2e;
+  --bg-camera: #000000;
+
+  /* text */
+  --text-primary: #e9e6df;
+  --text-secondary: #c8c4bb;
+  --text-muted: #9e9a91;
+  --text-subtle: #8a867e;
+  --text-disabled: #7f7b73;
+
+  /* brand */
+  --brand: #3d7a63;
+  --brand-text: #8db9a4;
+  --brand-active: #a3c7b5;
+  --brand-hover-bg: #2c5d4d;
+  --brand-strong: #8db9a4;
+  --brand-border-strong: #5d9c83;
+  --brand-focus: #5d9c83;
+  --brand-tint: #24403a;
+  --brand-tint-2: #1f3730;
+  --brand-tint-3: #1c2f29;
+
+  /* amber */
+  --amber: #d3a95e;
+  --amber-strong: #e0bd7f;
+  --amber-bg: #352c1c;
+  --amber-border: #7d6230;
+
+  /* danger */
+  --danger: #a64b4b;
+  --danger-text: #d98c8c;
+  --danger-border: #6e3d3d;
+
+  /* borders */
+  --border: #3a4043;
+  --border-strong: #4a5154;
+  --border-soft: #33393c;
+
+  /* on-brand */
+  --on-brand: #ffffff;
+  --bg-disabled-2: #3a4043;
+
+  /* A green drop shadow disappears against the near-black nav bar, so the raised
+     look leans on a lighter brand ring plus a deeper shadow cast on the page. */
+  --fab-shadow: 0 0 0 2px var(--brand-border-strong), 0 8px 18px rgba(0, 0, 0, 0.6);
 }

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { createTransactionDraft, missingCounterpartyLabel, missingItemNameLabel, type DraftForm, type TransactionDraft } from "../appShell/drafts";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
 
@@ -194,7 +195,7 @@ function resolveAccount(
   }
   const raw = asText(value);
   if (policy.account === "existing" || !raw) {
-    return { account: null, issue: `帳戶「${raw || "(空白)"}」不存在。` };
+    return { account: null, issue: t("validation.entityMissing", { label: t("field.account"), name: raw || t("common.blankName") }) };
   }
   return { account: { name: raw, currency: "TWD" }, newAccount: raw };
 }
@@ -213,7 +214,7 @@ function resolveCategory(
   }
   const raw = asText(value);
   if (policy.category === "existing" || !raw) {
-    return { category: "", issue: `類別「${raw || "(空白)"}」不存在。` };
+    return { category: "", issue: t("validation.entityMissing", { label: t("field.category"), name: raw || t("common.blankName") }) };
   }
   return { category: raw, newCategory: raw };
 }
@@ -229,7 +230,7 @@ function resolveTransferDestination(
   }
   const raw = asText(value);
   if (policy.account === "existing" || !raw) {
-    return { issue: `轉帳目標帳戶「${raw || "(空白)"}」不存在。` };
+    return { issue: t("validation.entityMissing", { label: t("field.targetAccount"), name: raw || t("common.blankName") }) };
   }
   return { newTransferAccount: raw };
 }
@@ -314,7 +315,7 @@ export function parseDraftSuggestions(
 
     const kind = normalizeKind(input.kind);
     if (!kind) {
-      issues.push(`不支援的類型「${asText(input.kind) || "(空白)"}」。`);
+      issues.push(t("validation.unsupportedKind", { kind: asText(input.kind) || t("common.blankName") }));
     }
 
     const { issues: entityIssues, newEntities, account, category } = resolveEntitiesFor(input, accounts, categories, policy, kind);
@@ -326,7 +327,7 @@ export function parseDraftSuggestions(
     // transferAmount, which buildForm already prefers when building the draft.
     const effectiveAmount = kind === "transfer" && !amount ? transferAmount : amount;
     if (!effectiveAmount) {
-      issues.push("金額無法辨識。");
+      issues.push(t("validation.amountUnrecognized"));
     }
 
     if (!kind || !account || !effectiveAmount) {
@@ -338,7 +339,7 @@ export function parseDraftSuggestions(
     // name when the policy allows a new one); only the same-account check is
     // left here.
     if (form.transferAccount === form.account) {
-      issues.push("轉帳來源與目標帳戶相同。");
+      issues.push(t("validation.sameTransferAccount"));
     }
 
     if (issues.length > 0) {
@@ -347,7 +348,7 @@ export function parseDraftSuggestions(
 
     const draft = createTransactionDraft(form, `ai-${crypto.randomUUID()}`, [...accounts, ...syntheticAccountsFor(newEntities)]);
     if (!draft) {
-      issues.push("欄位組合未通過既有記帳規則,請手動檢查。");
+      issues.push(t("validation.ruleViolation"));
       return { id, input, draft: null, ok: false, issues, ...newEntities };
     }
     return { id, input, draft, ok: true, issues, ...newEntities };

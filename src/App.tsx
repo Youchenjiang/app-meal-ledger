@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import {
   AlertCircle,
+  ArrowDownUp,
   Banknote,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Cloud,
   CloudOff,
   Eye,
@@ -15,26 +17,35 @@ import {
   LayoutGrid,
   LogIn,
   LogOut,
+  Pencil,
   Plus,
+  Search,
+  Trash2,
   UserPlus,
   ReceiptText,
   Settings,
   Sparkles,
   Upload,
-  UserRound,
   Wifi,
   WifiOff,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
-import { ALREADY_REGISTERED_MESSAGE, type LinkedIdentity, type OAuthProvider } from "./auth/authActions";
+import { alreadyRegisteredMessage, type LinkedIdentity, type OAuthProvider } from "./auth/authActions";
 import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type RecurrenceAmountMode, type RecurrenceChoice, type TransactionDraft } from "./appShell/drafts";
+import { applyResolvedTheme, readStoredTheme, resolveTheme, writeStoredTheme, type ThemeMode } from "./appShell/theme";
+import { t } from "./i18n";
+import { useI18n } from "./i18n/react";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
+import { readDeleteAction, writeDeleteAction, type DeleteAction } from "./manualLedger/deletePolicy";
+import { negativeBalanceRejectionReason, readNegativeBalancePolicy, writeNegativeBalancePolicy, type NegativeBalancePolicy } from "./manualLedger/negativeBalance";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
+import { formatAmountString } from "./manualLedger/money";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 import { createMultiTableExportWithProgress, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
@@ -52,20 +63,19 @@ import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retain
 import { queueUploadFiles, uploadMediaFile, validateMediaBatch, type SignedUploadClient, type UploadQueueItem } from "./captureMedia/upload";
 import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient, type RawSupabaseClient } from "./cloudPersistence/supabaseClient";
 import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
-import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
+import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedQueue, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel, AiModeSwitch } from "./ai/AiLedgerPanel";
 import { readAiEntityPolicy, writeAiEntityPolicy, type AiEntityPolicy, type AiEntityPolicyOption } from "./ai/entityPolicy";
 import { buildPrefillForm, type NewEntityCarrier } from "./ai/parse";
 
 const navItems: NavItem[] = [
-  { route: "overview", label: "概覽", path: "/", icon: Home },
-  { route: "ledger", label: "明細", path: "/ledger", icon: Banknote },
-  { route: "capture", label: "新增", path: "/capture", icon: Plus },
-  { route: "zone", label: "專區", path: "/zone", icon: LayoutGrid },
-  { route: "settings", label: "設定", path: "/settings", icon: Settings },
+  { route: "overview", labelKey: "nav.overview", path: "/", icon: Home },
+  { route: "ledger", labelKey: "nav.ledger", path: "/ledger", icon: Banknote },
+  { route: "capture", labelKey: "nav.capture", path: "/capture", icon: Plus },
+  { route: "zone", labelKey: "nav.zone", path: "/zone", icon: LayoutGrid },
+  { route: "settings", labelKey: "nav.settings", path: "/settings", icon: Settings },
 ];
-const accountNavItem: NavItem = { route: "account", label: "Cloud & account", path: "/account", icon: UserRound };
 
 type RouteDefinition = {
   segments: string[];
@@ -91,7 +101,9 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["zone"], route: "zone" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
-  { segments: ["account"], route: "account" },
+  // /account stays reachable as the password-reset redirect target; it renders
+  // the settings page with the 登入 section open (see the settings spec).
+  { segments: ["account"], route: "settings" },
 ];
 
 function navItemFor(route: AppRoute): NavItem {
@@ -109,18 +121,14 @@ function localDateTime(): string {
   return `${localDate()}T12:00`;
 }
 
-function countLabel(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
-
-function metricDetail(count: number, populated: string, empty: string): string {
-  return count > 0 ? populated : empty;
+function countLabel(count: number, label: string): string {
+  return `${count} ${label}`;
 }
 
 function timePrecisionLabel(precision: DraftForm["timePrecision"]): string {
-  if (precision === "day") return "Day";
-  if (precision === "month") return "Month";
-  return "Period";
+  if (precision === "day") return t("common.day");
+  if (precision === "month") return t("common.month");
+  return t("common.period");
 }
 
 function selectedRefundIdsFor(form: DraftForm): string[] {
@@ -140,15 +148,18 @@ function importStatus(kind: "confirmed" | "kept-separate" | "merged", imported: 
 }
 
 function exportStageMessage(stage: "preparing" | "building" | "complete"): string {
-  if (stage === "complete") return "ZIP export ready.";
-  if (stage === "building") return "Building ZIP export...";
-  return "Preparing ZIP export...";
+  if (stage === "complete") return t("export.zipComplete");
+  if (stage === "building") return t("export.zipBuilding");
+  return t("export.zipPreparing");
 }
 
 function duplicateCandidateName(duplicate: ImportDuplicate): string {
+  // "Row 3", the same string the review list already uses for a row number:
+  // this used to ask for a second key with the same meaning, which no
+  // dictionary defined.
   return duplicate.candidateType === "existing-record"
     ? duplicate.candidateId
-    : `row ${duplicate.candidateRowNumber}`;
+    : t("draft.rowNumber", { row: duplicate.candidateRowNumber ?? 0 });
 }
 
 function duplicateCandidateLabel(duplicate: ImportDuplicate): string {
@@ -392,25 +403,25 @@ function readStoredAuditEvents(): LocalAuditEvent[] {
 }
 
 const expenseCategories = [
-  "Daily",
-  "Electronics",
-  "Cleaning",
-  "Transport",
-  "Breakfast",
-  "Lunch",
-  "Dinner",
-  "Clothing",
-  "Learning",
-  "Medical",
-  "Stationery",
-  "Entertainment",
-  "Hiking",
-  "Gift",
+  "日用",
+  "電子",
+  "清潔",
+  "交通",
+  "早餐",
+  "午餐",
+  "晚餐",
+  "服飾",
+  "學習",
+  "醫藥",
+  "文具",
+  "娛樂",
+  "登山",
+  "禮物",
   "AI",
-  "Fees",
+  "手續費",
 ];
 
-const incomeCategories = ["Allowance", "Salary", "Interest", "Gift", "Reimbursement", "Prize", "Other income"];
+const incomeCategories = ["零用錢", "薪資", "利息", "禮物", "報銷", "獎勵", "其他收入"];
 
 function createEmptyDraftForm(): DraftForm {
   return {
@@ -423,94 +434,151 @@ function createEmptyDraftForm(): DraftForm {
   };
 }
 
+// A transfer has no counterparty, so it is named by what it is and the two
+// accounts stay in the secondary line the card already renders ("… · 轉到 X").
 function draftDisplayName(draft: TransactionDraft): string {
-  return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
+  return draft.kind === "transfer" ? kindLabel(draft.kind) : draft.counterparty;
 }
 
+// Dialogue titles and aria labels use this, where a name is all the context the
+// user gets: a transfer spells out both accounts, and a record with no
+// counterparty of its own falls back to its translated kind. The kind used to
+// be interpolated raw, so an expense with nothing filled in was titled
+// "unresolved-expense" on screen.
 function recordDisplayName(record: LocalLedgerRecord): string {
-  return record.kind === "transfer" ? `${record.accountName} → ${record.transferAccountName || "Destination"}` : record.counterparty || record.reason || record.kind;
+  return record.kind === "transfer" ? t("app.recordTransfer", { account: record.accountName, target: record.transferAccountName || t("common.destination") }) : record.counterparty || record.reason || kindLabel(record.kind);
 }
 
-function recordDetailLine(record: LocalLedgerRecord): string {
+// The row title leads with the purchased item (品項) when one exists; the
+// merchant/source stays visible as the second line of the name cell. A transfer
+// is titled by its kind, because its accounts are already the meta line below —
+// spelling them out in both places is the duplication the row was meant to lose.
+function recordTitle(record: LocalLedgerRecord): string {
+  if (record.itemName && !record.itemNameMissing) return record.itemName;
+  if (record.kind === "transfer") return kindLabel(record.kind);
+  return recordDisplayName(record);
+}
+
+// The row shows a compact MM/DD in its own narrow cell; the meta line keeps
+// the filterable dimensions (account · category) visible instead of spending
+// its space on a full date.
+function recordShortDate(record: LocalLedgerRecord): string {
+  const value = record.localDate || record.periodStart || record.periodEnd;
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[2]}/${match[3]}` : value;
+}
+
+// V1 recurrence has no frequency field: the next cycle is one month after the
+// record date, clamped to the last valid day of the target month when the day
+// does not exist there (accounting-rules.md: monthly recurrence on the 29th,
+// 30th, or 31st falls back to the last valid day).
+function addMonthsClamped(dateStr: string, months: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return dateStr;
+  const target = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+}
+
+function shortDateOf(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[2]}/${match[3]}` : null;
+}
+
+// The MM/DD of the next scheduled occurrence, matching the row's date style.
+function nextCycleShortDate(record: LocalLedgerRecord): string | null {
+  const base = record.localDate || record.periodStart;
+  return base ? shortDateOf(addMonthsClamped(base, 1)) : null;
+}
+
+function recordMetaLine(record: LocalLedgerRecord): string {
   if (record.kind === "transfer") {
-    return `${record.localDate} · ${record.accountName} → ${record.transferAccountName || "Destination"}`;
+    return t("app.metaTransfer", { account: record.accountName, target: record.transferAccountName || t("common.destination") });
   }
 
   if (record.kind === "fund-addition") {
-    return `${record.localDate} · ${record.accountName} · ${record.reason || "Initial funds"}`;
+    return t("app.metaFundAddition", { account: record.accountName, reason: record.reason || t("common.initialFunding") });
   }
 
-  return `${record.localDate} · ${record.accountName} · ${record.category || record.reason || "Category needed"}`;
+  return t("app.metaDefault", { account: record.accountName, category: record.category || record.reason || t("common.needCategory") });
+}
+
+// Opening balances (期初餘額) are the account's starting point, not a
+// transaction: they are excluded from the ledger history and surfaced on the
+// account report card instead. All account-setup flows create them through
+// createInitialFundingDraft without a source, so the counterparty is always
+// the hard-coded "Initial funds" marker.
+function isOpeningBalance(record: LocalLedgerRecord): boolean {
+  return record.kind === "fund-addition" && record.counterparty === "Initial funds";
 }
 
 function syncTargetLabel(target: CloudSyncQueueItem["target"]): string {
   switch (target) {
     case "record":
-      return "ledger record";
+      return t("status.syncTargetRecord");
     case "draft":
-      return "ledger draft";
+      return t("status.syncTargetDraft");
     case "meal":
-      return "meal";
+      return t("status.syncTargetMeal");
     case "media":
-      return "media metadata";
+      return t("status.syncTargetMedia");
     default:
-      return "scan source";
+      return t("status.syncTargetScan");
   }
 }
 
 function formatAmountStep(step: number): string {
   if (step === 1000) {
-    return "+1k";
+    return t("status.amountStepK");
   }
   if (step === -1000) {
-    return "-1k";
+    return t("status.amountStepMinusK");
   }
-  return step > 0 ? `+${step}` : String(step);
+  return step > 0 ? t("status.amountStepPlus", { step }) : t("status.amountStepMinus", { step: Math.abs(step) });
 }
 
 function draftCountLabel(draftCount: number): string {
   if (draftCount === 0) {
-    return "No drafts to review";
+    return t("draft.noPending");
   }
 
-  const noun = draftCount === 1 ? "draft" : "drafts";
-  return `${draftCount} ${noun} waiting`;
+  return t("draft.pendingCount", { count: draftCount });
 }
 
 function draftReviewCopy(draftCount: number): string {
   if (draftCount === 0) {
-    return "Scans, imports, and cancelled entries will appear here before ledger confirmation.";
+    return t("draft.reviewEmptyDetail");
   }
 
-  const noun = draftCount === 1 ? "draft" : "drafts";
-  return `${draftCount} ${noun} waiting. Continue in Capture or confirm a complete draft here.`;
+  return t("draft.reviewDetail", { count: draftCount });
 }
 
 function formatAliasReviewMessage(items: Array<{ rowNumber: number; summary: string }>): string {
   if (items.length === 0) return "";
-  const details = items.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ");
-  return ` Category review: ${details}`;
+  const details = items.map((item) => `${t("draft.rowNumber", { row: item.rowNumber })}:${item.summary}`).join(" ");
+  return ` ${t("draft.aliasReview", { details })}`;
 }
 
 function formatDuplicateReviewMessage(rowNumbers: number[]): string {
   if (rowNumbers.length === 0) return "";
-  const details = rowNumbers.map((rowNumber) => `Row ${rowNumber}`).join(", ");
-  return ` Duplicate review: ${details}.`;
+  const details = rowNumbers.map((rowNumber) => t("draft.rowNumber", { row: rowNumber })).join("、");
+  return ` ${t("draft.duplicateReview", { details })}`;
 }
 
 function counterpartyLabelForKind(kind: DraftForm["kind"]): string {
   switch (kind) {
     case "income":
     case "fund-addition":
-      return "Source";
+      return t("field.source");
     case "adjustment":
-      return "Reason";
+      return t("field.reason");
     case "expense":
-      return "Merchant";
+      return t("field.merchant");
     case "refund":
-      return "Merchant or source";
+      return t("field.merchantOrSource");
     default:
-      return "Merchant or source";
+      return t("field.merchantOrSource");
   }
 }
 
@@ -532,6 +600,7 @@ function readStoredDrafts(): TransactionDraft[] {
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon; hideInShell?: boolean };
 type HandoffCounts = { accounts: number; records: number; drafts: number; meals: number; media: number };
 type AccountPageProps = Readonly<{
+  headingId?: string;
   authState: AuthState;
   authMessage: string;
   cloudDataOwnerMatches: boolean;
@@ -552,18 +621,18 @@ type AccountPageProps = Readonly<{
 
 function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspace: boolean): StatusItem {
   if (!online) {
-    return { label: "Offline", detail: "Drafts and records stay visible on this device while offline.", icon: WifiOff, tone: "neutral" };
+    return { label: t("status.offline"), detail: t("status.offlineDetail"), icon: WifiOff, tone: "neutral" };
   }
 
   if (localWorkspace || authState === "signed-out") {
-    return { label: "Local-only", detail: "This workspace keeps changes on this device until an account is verified.", icon: CloudOff, tone: "neutral", hideInShell: true };
+    return { label: t("status.localOnly"), detail: t("status.localOnlyDetail"), icon: CloudOff, tone: "neutral", hideInShell: true };
   }
 
   if (authState === "auth-error") {
-    return { label: "Local-only", detail: "Cloud authentication is unavailable. Changes remain on this device.", icon: CloudOff, tone: "warn", hideInShell: true };
+    return { label: t("status.localOnly"), detail: t("status.localOnlyAuthErrorDetail"), icon: CloudOff, tone: "warn", hideInShell: true };
   }
 
-  return { label: "Checking cloud connection", detail: "The workspace is checking whether cloud sync is available.", icon: Wifi, tone: "neutral" };
+  return { label: t("status.checkingCloud"), detail: t("status.checkingCloudDetail"), icon: Wifi, tone: "neutral" };
 }
 
 type EnabledSyncStatusInput = {
@@ -587,17 +656,17 @@ function enabledSyncStatus({
   firstError,
   firstUploadError,
 }: Readonly<EnabledSyncStatusInput>): StatusItem {
-  if (conflictCount > 0) return { label: `${countLabel(conflictCount, "sync conflict")} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
-  if (errorCount > 0) return { label: countLabel(errorCount, "cloud sync error"), detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
-  if (uploadErrorCount > 0) return { label: countLabel(uploadErrorCount, "media upload error"), detail: firstUploadError ? `The media upload failed: ${firstUploadError}. Select the original file again to retry.` : "A media upload failed. Select the original file again to retry.", icon: CloudOff, tone: "danger" };
-  if (pendingCount > 0) return { label: `${pendingCount} cloud sync pending`, detail: "Local changes are queued for the configured Supabase workspace.", icon: CloudOff, tone: "warn" };
+  if (conflictCount > 0) return { label: t("status.syncConflictsPending", { count: conflictCount }), detail: t("status.syncConflictsPendingDetail"), icon: CloudOff, tone: "danger" };
+  if (errorCount > 0) return { label: t("status.syncErrors", { count: errorCount }), detail: firstError ? t("status.syncErrorsDetail", { error: firstError }) : t("status.syncErrorsDetailFallback"), icon: CloudOff, tone: "danger" };
+  if (uploadErrorCount > 0) return { label: t("status.uploadErrors", { count: uploadErrorCount }), detail: firstUploadError ? t("status.uploadErrorsDetail", { error: firstUploadError }) : t("status.uploadErrorsDetailFallback"), icon: CloudOff, tone: "danger" };
+  if (pendingCount > 0) return { label: t("status.syncPending", { count: pendingCount }), detail: t("status.syncPendingDetail"), icon: CloudOff, tone: "warn" };
   if (uploadCount > 0) {
-    return { label: "Cloud sync incomplete", detail: `Ledger records are synced, but ${countLabel(uploadCount, "image")} remains local-only until media upload completes.`, icon: CloudOff, tone: "warn" };
+    return { label: t("status.syncIncomplete"), detail: t("status.syncIncompleteDetail", { count: t("status.imagesCount", { count: uploadCount }) }), icon: CloudOff, tone: "warn" };
   }
   if (unavailableUploadCount > 0) {
-    return { label: "Media needs reselect", detail: `${countLabel(unavailableUploadCount, "image")} has metadata only; select the original file again to upload its bytes.`, icon: CloudOff, tone: "warn" };
+    return { label: t("status.mediaReselect"), detail: t("status.mediaReselectDetail", { count: t("status.imagesCount", { count: unavailableUploadCount }) }), icon: CloudOff, tone: "warn" };
   }
-  return { label: "Cloud sync ready", detail: "Cloud records and media have no pending writes.", icon: Wifi, tone: "neutral", hideInShell: true };
+  return { label: t("status.syncReady"), detail: t("status.syncReadyDetail"), icon: Wifi, tone: "neutral", hideInShell: true };
 }
 
 function syncStatusItem({
@@ -630,7 +699,7 @@ function syncStatusItem({
   firstError?: string;
 }>): StatusItem {
   if (blocked) {
-    return { label: "Local data review required", detail: "This signed-in workspace will not claim data from another local user automatically.", icon: CloudOff, tone: "danger" };
+    return { label: t("status.needsReview"), detail: t("status.needsReviewDetail"), icon: CloudOff, tone: "danger" };
   }
   return enabled ? enabledSyncStatus({
     pendingCount,
@@ -669,7 +738,7 @@ function releaseUploadCandidates(inFlight: Set<string>, candidates: Array<{ item
 function draftReviewStatus(draftCount: number): StatusItem {
   return {
     label: draftCountLabel(draftCount),
-    detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
+    detail: draftCount > 0 ? t("draft.reviewDetailShort") : t("draft.reviewNoneDetail"),
     icon: draftCount > 0 ? AlertCircle : CheckCircle2,
     tone: draftCount > 0 ? "warn" : "good",
     hideInShell: true,
@@ -682,9 +751,9 @@ function statusWhen(condition: boolean, item: StatusItem): StatusItem[] {
 
 function recordStorageStatus(recordCount: number, cloudSyncEnabled: boolean): StatusItem {
   if (cloudSyncEnabled) {
-    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good", hideInShell: true };
+    return { label: t("status.recordsSynced", { count: recordCount }), detail: t("status.recordsSyncedDetail"), icon: Cloud, tone: "good", hideInShell: true };
   }
-  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn", hideInShell: true };
+  return { label: t("status.recordsLocal", { count: recordCount }), detail: t("status.recordsLocalDetail"), icon: CloudOff, tone: "warn", hideInShell: true };
 }
 
 function buildStatusItems({
@@ -736,11 +805,11 @@ function buildStatusItems({
   return [
     syncItem,
     draftReviewStatus(draftCount),
-    ...statusWhen(persistenceWarning, { label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" }),
-    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn", hideInShell: true }),
-    ...statusWhen(uploadCount > 0, { label: `${countLabel(uploadCount, "local image")}`, detail: "The image bytes are saved on this device; cloud image backup is not enabled in this spec.", icon: CloudOff, tone: "warn" }),
-    ...statusWhen(uploadErrorCount > 0, { label: `${countLabel(uploadErrorCount, "image")} upload failed`, detail: firstUploadError ? `${firstUploadError}. Select the original file again to retry.` : "Select the original file again to retry.", icon: CloudOff, tone: "danger" }),
-    ...statusWhen(unavailableUploadCount > 0, { label: `${countLabel(unavailableUploadCount, "image")} needs reselect`, detail: "Only metadata remains on this device; select the original file again to back up its bytes.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(persistenceWarning, { label: t("status.storageUnavailable"), detail: t("status.storageUnavailableDetail"), icon: AlertCircle, tone: "warn" }),
+    ...statusWhen(draftCount > 0, { label: t("status.localDraftData"), detail: cloudSyncEnabled ? t("status.localDraftDataSyncedDetail") : t("status.localDraftDataLocalDetail"), icon: CloudOff, tone: "warn", hideInShell: true }),
+    ...statusWhen(uploadCount > 0, { label: t("status.localImages", { count: uploadCount }), detail: t("status.localImagesDetail"), icon: CloudOff, tone: "warn" }),
+    ...statusWhen(uploadErrorCount > 0, { label: t("status.imageUploadFailed", { count: uploadErrorCount }), detail: firstUploadError ? t("status.imageUploadFailedDetail", { error: firstUploadError }) : t("status.imageUploadFailedDetailFallback"), icon: CloudOff, tone: "danger" }),
+    ...statusWhen(unavailableUploadCount > 0, { label: t("status.imageReselect", { count: unavailableUploadCount }), detail: t("status.imageReselectDetail"), icon: CloudOff, tone: "warn" }),
     ...statusWhen(recordCount > 0, recordStorageStatus(recordCount, cloudSyncEnabled)),
   ];
 }
@@ -750,10 +819,11 @@ function shellStatusItems(items: StatusItem[]): StatusItem[] {
 }
 
 function StatusStrip({ items, compact = false }: Readonly<{ items: StatusItem[]; compact?: boolean }>) {
+  const { t } = useI18n();
   if (items.length === 0) return null;
 
   return (
-    <section className={`status-strip ${compact ? "status-strip-compact" : ""}`} aria-label="Application status">
+    <section className={`status-strip ${compact ? "status-strip-compact" : ""}`} aria-label={t("nav.appStatus")}>
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -768,13 +838,14 @@ function StatusStrip({ items, compact = false }: Readonly<{ items: StatusItem[];
 }
 
 function Brand({ caption, large = false }: Readonly<{ caption: string; large?: boolean }>) {
+  const { t } = useI18n();
   return (
     <div className={`brand ${large ? "large" : ""}`}>
       <div className="brand-mark">
         <ReceiptText size={large ? 22 : 20} aria-hidden="true" />
       </div>
       <div>
-        <p className="brand-name">MealLedger</p>
+        <p className="brand-name">{t("nav.brand")}</p>
         <p className="brand-caption">{caption}</p>
       </div>
     </div>
@@ -786,24 +857,32 @@ function BottomNav({ route, reviewCount, navigate }: Readonly<{
   reviewCount: number;
   navigate: (item: NavItem) => void;
 }>) {
+  const { t: translate } = useI18n();
   return (
-    <nav className="bottom-nav" aria-label="MealLedger navigation">
+    <nav className="bottom-nav" aria-label={translate("nav.navAria")}>
       {navItems.map((item) => {
         const Icon = item.icon;
+        // The bar is icon-only, so every glyph carries its item alone and the
+        // caption below is the accessible name rather than a visible label. The
+        // center 新增 button is the raised FAB (ADR 0006), drawn larger and
+        // heavier than the flat items beside it.
+        const isCreate = item.route === "capture";
         return (
           <button
-            className={`nav-item ${route === item.route ? "active" : ""} ${item.route === "capture" ? "nav-create" : ""}`}
+            className={`nav-item nav-item-${item.route} ${route === item.route ? "active" : ""} ${isCreate ? "nav-create" : ""}`}
             key={item.route}
             type="button"
             aria-current={route === item.route ? "page" : undefined}
             onClick={() => navigate(item)}
           >
-            <span className="nav-icon" aria-hidden="true"><Icon size={20} /></span>
-            <span>{item.label}</span>
+            <span className="nav-icon" aria-hidden="true">
+              <Icon size={isCreate ? 26 : 24} strokeWidth={isCreate ? 2.5 : 2} />
+            </span>
+            <span className="nav-caption">{translate(item.labelKey)}</span>
             {item.route === "ledger" && reviewCount > 0 ? (
               <>
                 <span className="nav-badge" aria-hidden="true">{reviewCount}</span>
-                <span className="visually-hidden">, {reviewCount} item{reviewCount === 1 ? "" : "s"} to review</span>
+                <span className="visually-hidden">, {translate("nav.reviewCount", { count: reviewCount })}</span>
               </>
             ) : null}
           </button>
@@ -820,11 +899,12 @@ function WorkspaceHeader({ route, statusItems, headerAction }: Readonly<{
   // (e.g. the 整段口說/逐欄口說 switch on the voice capture page).
   headerAction?: ReactNode;
 }>) {
+  const { t } = useI18n();
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
         <div className="topbar-title">
-          <p className="eyebrow">Personal finance workspace</p>
+          <p className="eyebrow">{t("nav.brandCaption")}</p>
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
         {headerAction ?? <StatusStrip items={statusItems} compact />}
@@ -874,8 +954,30 @@ export function App() {
   );
 }
 
+// 深色 default, with 淺色 / 跟隨系統 options. Applies the resolved theme to
+// <html data-theme> (styles.css variables), persists the choice, and follows
+// the OS preference while the mode is 跟隨系統. See src/appShell/theme.ts.
+function useThemeMode() {
+  const [mode, setMode] = useState<ThemeMode>(readStoredTheme);
+
+  useEffect(() => {
+    const apply = () => applyResolvedTheme(resolveTheme(mode));
+    apply();
+    writeStoredTheme(mode);
+    if (mode === "system") {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+    return undefined;
+  }, [mode]);
+
+  return [mode, setMode] as const;
+}
+
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
+  const [themeMode, setThemeMode] = useThemeMode();
   const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, recoverPasswordFromLink, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
@@ -892,13 +994,15 @@ function AuthenticatedApp() {
   uploadQueueRef.current = uploadQueue;
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
+  const [deleteAction, setDeleteAction] = useState<DeleteAction>(readDeleteAction);
+  const [negativeBalancePolicy, setNegativeBalancePolicy] = useState<NegativeBalancePolicy>(readNegativeBalancePolicy);
+  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   // Which capture mode the 新增 header switch shows; shared with the panel.
-  // 新增 defaults to 逐欄口說: the approved wireframe flow fills fields one at
-  // a time and degrades to raw input when AI is unreachable, while 整段口說
-  // needs the AI proxy for its free-text parse.
-  const [voiceCaptureMode, setVoiceCaptureMode] = useState<"a" | "b">("b");
+  // Defaults to 整段口說 (mode A): like modern voice apps (Voinance/念帳),
+  // users want to speak one sentence and let AI extract all fields into a review card.
+  const [voiceCaptureMode, setVoiceCaptureMode] = useState<"a" | "b">("a");
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
   const [cloudSyncQueue, setCloudSyncQueue] = useState<CloudSyncQueueItem[]>(readStoredCloudSyncQueue);
@@ -920,6 +1024,22 @@ function AuthenticatedApp() {
   useEffect(() => {
     writeAiEntityPolicy(aiEntityPolicy);
   }, [aiEntityPolicy]);
+
+  useEffect(() => {
+    writeDeleteAction(deleteAction);
+  }, [deleteAction]);
+
+  useEffect(() => {
+    writeNegativeBalancePolicy(negativeBalancePolicy);
+  }, [negativeBalancePolicy]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
+    } catch {
+      // Category persistence is best effort while the account and record stores remain local-first.
+    }
+  }, [customCategories]);
 
   useEffect(() => {
     try {
@@ -1131,6 +1251,7 @@ function AuthenticatedApp() {
     const client = createSupabasePersistenceClient(rawClient);
     const referenceClient = createSupabaseReferenceBootstrapClient(rawClient);
     const now = new Date().toISOString();
+    const queueSnapshot = cloudSyncQueue;
 
     const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
     const merchantKinds = new Set(["expense", "refund", "unresolved-expense"]);
@@ -1153,16 +1274,16 @@ function AuthenticatedApp() {
       meals,
       media: uploadQueue,
       scans,
-      queue: cloudSyncQueue,
+      queue: queueSnapshot,
       now,
     }).then((result) => {
       setRecords(result.records);
       setMeals(result.meals);
       setUploadQueue((current) => mergeSyncedItems(current, result.media));
       setScans((current) => mergeSyncedScans(current, result.scans));
-      setCloudSyncQueue((current) => mergeSyncedItems(current, result.queue));
+      setCloudSyncQueue((current) => mergeSyncedQueue(current, result.queue, queueSnapshot));
     }).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : "Cloud synchronization failed.";
+      const message = error instanceof Error ? error.message : "雲端同步失敗。";
       setCloudSyncQueue((current) => markCloudSyncRetryable(current, message));
     }).finally(() => {
       cloudSyncInFlight.current = false;
@@ -1197,6 +1318,7 @@ function AuthenticatedApp() {
     ));
   };
 
+  const { t } = useI18n();
   const statusItems = useMemo(() => buildStatusItems({
     authState,
     userId,
@@ -1210,7 +1332,7 @@ function AuthenticatedApp() {
     uploadErrorCount: uploadQueue.filter((item) => item.status === "failed").length,
     firstUploadError: uploadQueue.find((item) => item.status === "failed" && item.error)?.error,
     recordCount,
-  }), [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, uploadQueue, userId]);
+  }), [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, t, uploadQueue, userId]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -1229,8 +1351,8 @@ function AuthenticatedApp() {
             aliases: readStoredAliases(),
           });
 
+          setCustomCategories(next.categories);
           try {
-            window.localStorage.setItem(categoriesStorageKey, JSON.stringify(next.categories));
             window.localStorage.setItem(tagsStorageKey, JSON.stringify(next.tags));
             window.localStorage.setItem(aliasesStorageKey, JSON.stringify(next.aliases));
           } catch {
@@ -1270,7 +1392,7 @@ function AuthenticatedApp() {
       <section className={`workspace${route === "capture" ? " workspace-voice" : ""}`}>
         <WorkspaceHeader
           route={route}
-          statusItems={route !== "settings" && route !== "account" && route !== "capture" ? shellStatusItems(statusItems) : []}
+          statusItems={route !== "settings" && route !== "capture" ? shellStatusItems(statusItems) : []}
           headerAction={route === "capture" ? <AiModeSwitch mode={voiceCaptureMode} onModeChange={setVoiceCaptureMode} /> : undefined}
         />
         {renderRoute({
@@ -1294,6 +1416,7 @@ function AuthenticatedApp() {
           records,
           setRecords,
           setAuditEvents,
+          setCloudSyncQueue,
           queueRecordBundle,
           cloudSyncIssues: cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"),
           onRetryCloudSyncItem: (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())),
@@ -1301,6 +1424,14 @@ function AuthenticatedApp() {
           setAccounts,
           aiEntityPolicy,
           setAiEntityPolicy,
+          deleteAction,
+          setDeleteAction,
+          negativeBalancePolicy,
+          setNegativeBalancePolicy,
+          customCategories,
+          setCustomCategories,
+          themeMode,
+          onThemeModeChange: setThemeMode,
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
           onSignIn: signIn,
@@ -1351,14 +1482,14 @@ function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSa
     const account = createLocalAccount(accountName, currency, crypto.randomUUID(), accountType, allowNegativeBalance);
 
     if (!account) {
-      setError("Enter an account name and currency.");
+      setError(t("capture.quickAccountNameCurrencyRequired"));
       return;
     }
 
     if (balanceMode === "current") {
       const draft = createInitialFundingDraft({ account: account.name, amount: balance, currency: account.currency, date: balanceDate }, `fund-${account.id}`);
       if (!draft || !onSaveInitialFunding(account, draft)) {
-        setError("Enter a positive current balance and a valid date.");
+        setError(t("settings.currentBalanceInvalid"));
         return;
       }
     }
@@ -1371,11 +1502,11 @@ function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSa
   return (
     <main className="signed-out-shell">
       <section className="signed-out-panel onboarding-panel">
-        <Brand caption="Personal finance records" large />
+        <Brand caption={t("settings.onboardingCaption")} large />
         <div>
-          <p className="eyebrow">First setup</p>
-          <h1>Set up your first account</h1>
-          <p className="lede">Your current balance is recorded as initial funds, not income.</p>
+          <p className="eyebrow">{t("settings.onboardingEyebrow")}</p>
+          <h1>{t("settings.onboardingTitle")}</h1>
+          <p className="lede">{t("settings.onboardingLede")}</p>
         </div>
         <form className="onboarding-form" noValidate onSubmit={submit}>
           <OnboardingFields
@@ -1433,24 +1564,25 @@ function OnboardingFields({
   onBalanceChange: (value: string) => void;
   onBalanceDateChange: (value: string) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <>
       <label>
-        <span>Account name</span>
-        <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" />
+        <span>{t("field.accountName")}</span>
+        <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder={t("capture.dailyWalletPlaceholder")} />
       </label>
       <label>
-        <span>Account type</span>
+        <span>{t("field.accountType")}</span>
         <select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}>
-          <option value="cash">Cash</option>
-          <option value="bank">Bank account</option>
-          <option value="card">Credit card</option>
-          <option value="wallet">Stored-value wallet</option>
-          <option value="other">Other</option>
+          <option value="cash">{t("field.accountTypeCash")}</option>
+          <option value="bank">{t("field.accountTypeBank")}</option>
+          <option value="card">{t("field.accountTypeCard")}</option>
+          <option value="wallet">{t("field.accountTypeWallet")}</option>
+          <option value="other">{t("field.accountTypeOther")}</option>
         </select>
       </label>
       <label>
-        <span>Currency</span>
+        <span>{t("field.currency")}</span>
         <select value={currency} onChange={(event) => onCurrencyChange(event.target.value)}>
           <option value="TWD">TWD</option>
           <option value="JPY">JPY</option>
@@ -1459,17 +1591,17 @@ function OnboardingFields({
       </label>
       <label className="checkbox-row">
         <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} />
-        <span>Allow negative balance</span>
+        <span>{t("capture.allowNegativeBalance")}</span>
       </label>
       <fieldset>
-        <legend>Starting balance</legend>
-        <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>Start from zero</span></label>
-        <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>Enter current balance</span></label>
+        <legend>{t("field.initialBalance")}</legend>
+        <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>{t("capture.startFromZero")}</span></label>
+        <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>{t("capture.enterCurrentBalance")}</span></label>
       </fieldset>
       {balanceMode === "current" ? <div className="onboarding-balance-fields">
-        <AmountField id="onboarding-current-balance" label="Current balance" required value={balance} onChange={onBalanceChange} placeholder="0" />
+        <AmountField id="onboarding-current-balance" label={t("field.currentBalance")} required value={balance} onChange={onBalanceChange} placeholder={t("capture.balancePlaceholder")} />
         <label>
-          <span>As of date</span>
+          <span>{t("field.asOfDate")}</span>
           <input required type="date" value={balanceDate} onChange={(event) => onBalanceDateChange(event.target.value)} />
         </label>
       </div> : null}
@@ -1478,10 +1610,11 @@ function OnboardingFields({
 }
 
 function OnboardingActions({ onComplete }: Readonly<{ onComplete: () => void }>) {
+  const { t } = useI18n();
   return (
     <div className="onboarding-actions">
-      <button className="primary-action" type="submit">Create account</button>
-      <button className="quiet-action" type="button" onClick={onComplete}>Browse workspace</button>
+      <button className="primary-action" type="submit">{t("settings.createAccount")}</button>
+      <button className="quiet-action" type="button" onClick={onComplete}>{t("settings.browseWorkspace")}</button>
     </div>
   );
 }
@@ -1501,6 +1634,7 @@ type RouteRenderContext = {
   records: LocalLedgerRecord[];
   setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>;
   setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>;
+  setCloudSyncQueue: Dispatch<SetStateAction<CloudSyncQueueItem[]>>;
   queueRecordBundle: (records: LocalLedgerRecord[]) => void;
   cloudSyncIssues: CloudSyncQueueItem[];
   onRetryCloudSyncItem: (id: string) => void;
@@ -1508,6 +1642,14 @@ type RouteRenderContext = {
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
   aiEntityPolicy: AiEntityPolicy;
   setAiEntityPolicy: Dispatch<SetStateAction<AiEntityPolicy>>;
+  deleteAction: DeleteAction;
+  setDeleteAction: Dispatch<SetStateAction<DeleteAction>>;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  setNegativeBalancePolicy: Dispatch<SetStateAction<NegativeBalancePolicy>>;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
   onSignIn: (email?: string, password?: string) => Promise<void>;
@@ -1548,6 +1690,7 @@ function renderRoute({
   records,
   setRecords,
   setAuditEvents,
+  setCloudSyncQueue,
   queueRecordBundle,
   cloudSyncIssues,
   onRetryCloudSyncItem,
@@ -1555,6 +1698,14 @@ function renderRoute({
   setAccounts,
   aiEntityPolicy,
   setAiEntityPolicy,
+  deleteAction,
+  setDeleteAction,
+  negativeBalancePolicy,
+  setNegativeBalancePolicy,
+  customCategories,
+  setCustomCategories,
+  themeMode,
+  onThemeModeChange,
   navigate,
   onReopenOnboarding,
   onSignIn,
@@ -1583,13 +1734,20 @@ function renderRoute({
   const recordCount = records.length;
   const recordOwner = authState === "signed-in" && cloudDataOwnerMatches && userId !== "local-user" ? userId : "local-user";
 
+  // A draft that is discarded or confirmed into a record no longer exists
+  // locally, so its cloud-sync entry has nothing left to sync. Drop it right
+  // away (the engine also drops it defensively) to keep the queue clean.
+  const pruneDraftSyncItem = (draftId: string) => {
+    setCloudSyncQueue((current) => current.filter((item) => item.target !== "draft" || item.targetId !== draftId));
+  };
+
   const saveOfficialRecord = (
     draft: TransactionDraft,
     recordAccounts: LocalAccount[],
     idempotencyKey: string,
     recordId = `record-${draft.id}`,
     feeRecordId?: string,
-  ): boolean => {
+  ): string | null => {
     const bundle = createOfficialRecordBundle(draft, recordAccounts, {
       userId: recordOwner,
       recordId,
@@ -1599,26 +1757,36 @@ function renderRoute({
     });
 
     if (!bundle) {
-      return false;
+      return t("ledger.cannotSave");
+    }
+
+    if (negativeBalancePolicy === "reject") {
+      const reason = negativeBalanceRejectionReason(draft, recordAccounts, records);
+      if (reason) {
+        return reason;
+      }
     }
 
     setRecords((current) => appendIdempotentRecords(current, bundle));
     setAuditEvents((current) => [...current, ...bundle.auditEvents]);
     queueRecordBundle(bundle.records);
-    return true;
+    return null;
   };
 
   switch (route) {
     case "overview":
-      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} navigate={navigate} />;
+      return <OverviewPage onCreateAccount={onReopenOnboarding} onCreateRecord={() => navigate(navItemFor("capture"))} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} />;
     case "ledger":
       return (
         <LedgerPage
           records={records}
           drafts={drafts}
-          accounts={accounts}
           navigate={navigate}
-          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          deleteAction={deleteAction}
+          onDiscardDraft={(id) => {
+            setDrafts((current) => current.filter((draft) => draft.id !== id));
+            pruneDraftSyncItem(id);
+          }}
           onEditDraft={(draft) => {
             // Draft completion needs the manual ledger form, which now lives
             // on the Zone page; 新增 is the voice-capture flow.
@@ -1626,11 +1794,12 @@ function renderRoute({
             navigate(navItemFor("zone"));
           }}
           onConfirmDraft={(draft) => {
-            if (!saveOfficialRecord(draft, accounts, `draft:${draft.id}`)) {
+            if (saveOfficialRecord(draft, accounts, `draft:${draft.id}`) !== null) {
               return false;
             }
 
             setDrafts((current) => current.filter((item) => item.id !== draft.id));
+            pruneDraftSyncItem(draft.id);
             return true;
           }}
           onUpdateRecord={(id, patch) => {
@@ -1658,9 +1827,20 @@ function renderRoute({
             setAuditEvents((current) => [...current, result.auditEvent]);
             return true;
           }}
-          onVoidRecord={(id) => {
+          onDeleteRecord={(id) => {
             const record = records.find((item) => item.id === id);
             if (!record || record.recordState === "voided") {
+              return;
+            }
+
+            if (deleteAction === "hard-delete") {
+              // 真正刪除 removes the record and its bundle children (ADR 0007).
+              const deletedIds = new Set(records.filter((item) => item.id === id || item.linkedRecordId === id).map((item) => item.id));
+              setRecords((current) => current.filter((item) => !deletedIds.has(item.id)));
+              setAuditEvents((current) => current.filter((event) => !deletedIds.has(event.targetId)));
+              // Drop pending/failed sync entries for the removed records so the
+              // queue does not keep failing on records that no longer exist.
+              setCloudSyncQueue((current) => current.filter((item) => item.target !== "record" || !deletedIds.has(item.targetId)));
               return;
             }
 
@@ -1668,9 +1848,6 @@ function renderRoute({
             setRecords((current) => current.map((item) => item.id === id ? result.record : item));
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
-          onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`)}
-          onReopenOnboarding={onReopenOnboarding}
         />
       );
     case "capture":
@@ -1682,6 +1859,8 @@ function renderRoute({
           entityPolicy={aiEntityPolicy}
           mode={voiceCaptureMode}
           onModeChange={setVoiceCaptureMode}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
@@ -1695,10 +1874,15 @@ function renderRoute({
           aiEntityPolicy={aiEntityPolicy}
           navigate={navigate}
           draftToEdit={draftToEdit}
-          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
+          onDiscardDraft={(id) => {
+            setDrafts((current) => current.filter((draft) => draft.id !== id));
+            pruneDraftSyncItem(id);
+          }}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`)}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`) === null}
           onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
           onSaveMeal={onSaveMeal}
@@ -1718,32 +1902,14 @@ function renderRoute({
           records={records}
           entityPolicy={aiEntityPolicy}
           onEntityPolicyChange={setAiEntityPolicy}
-          onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
-          onReopenOnboarding={onReopenOnboarding}
-          onOpenAccount={() => navigate(accountNavItem)}
-          onImportRecord={(row, importId) => {
-            const draft = toImportedTransactionDraft(row, importId);
-            if (!draft) {
-              return false;
-            }
-
-            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`);
-          }}
-          onMergeImportDraft={(row, importId) => {
-            const draft = toImportedTransactionDraft(row, importId);
-            if (!draft) {
-              return false;
-            }
-
-            setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
-            return true;
-          }}
-        />
-      );
-    case "account":
-      return (
-        <AccountPage
+          themeMode={themeMode}
+          onThemeModeChange={onThemeModeChange}
+          deleteAction={deleteAction}
+          onDeleteActionChange={setDeleteAction}
+          negativeBalancePolicy={negativeBalancePolicy}
+          onNegativeBalancePolicyChange={setNegativeBalancePolicy}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           authState={authState}
           authMessage={authMessage}
           cloudDataOwnerMatches={cloudDataOwnerMatches}
@@ -1760,6 +1926,26 @@ function renderRoute({
           onUnlinkIdentity={onUnlinkIdentity}
           onClaimLocalWorkspace={onClaimLocalWorkspace}
           onSignOut={onSignOut}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`) === null}
+          onReopenOnboarding={onReopenOnboarding}
+          onImportRecord={(row, importId) => {
+            const draft = toImportedTransactionDraft(row, importId);
+            if (!draft) {
+              return false;
+            }
+
+            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`) === null;
+          }}
+          onMergeImportDraft={(row, importId) => {
+            const draft = toImportedTransactionDraft(row, importId);
+            if (!draft) {
+              return false;
+            }
+
+            setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
+            return true;
+          }}
         />
       );
     default:
@@ -1767,33 +1953,66 @@ function renderRoute({
   }
 }
 
-function OverviewPage({ draftCount, recordCount, accountBalances, accountReports, syncIssues, onRetrySyncItem, navigate }: Readonly<{
-  draftCount: number;
-  recordCount: number;
-  accountBalances: ReturnType<typeof calculateAccountBalances>;
+function OverviewPage({ onCreateAccount, onCreateRecord, accountReports, syncIssues, onRetrySyncItem }: Readonly<{
+  onCreateAccount: () => void;
+  onCreateRecord: () => void;
   accountReports: AccountReport[];
   syncIssues: CloudSyncQueueItem[];
   onRetrySyncItem: (id: string) => void;
-  navigate: (item: NavItem) => void;
 }>) {
-  const accountDetail = accountBalances.length === 0
-    ? "Add accounts before recording transactions."
-    : accountBalances.slice(0, 3).map((account) => `${account.name}: ${formatAccountBalance(account.balance, account.currency)}`).join(" · ");
+  const { t } = useI18n();
+  const recordCount = accountReports.reduce((total, report) => total + report.recordCount, 0);
 
   return (
-    <div className="route-stack">
-      <section className="summary-grid">
-        <EmptyMetric label="Account summary" value={accountBalances.length > 0 ? countLabel(accountBalances.length, "account") : "No balances yet"} detail={accountDetail} />
-        <EmptyMetric label="Ledger records" value={recordCount > 0 ? `${recordCount} saved` : "No records"} detail={metricDetail(recordCount, "Official local records are ready in Ledger.", "Your confirmed transactions will appear here.")} />
-        <EmptyMetric
-          label="Draft reviews"
-          value={draftCount > 0 ? `${draftCount} waiting` : "None"}
-          detail={metricDetail(draftCount, "Drafts are ready to review.", "Scans and imports will wait for review.")}
-        />
-      </section>
+    <div className="route-stack overview-page">
+      {accountReports.length === 0 ? (
+        <section className="workspace-empty">
+          <Banknote size={32} aria-hidden="true" />
+          <h2>{t("settings.onboardingTitle")}</h2>
+          <p>{t("overview.createAccountFirst")}</p>
+          <button className="primary-action" type="button" onClick={onCreateAccount}><Plus size={18} aria-hidden="true" />{t("settings.createAccount")}</button>
+        </section>
+      ) : (
+        // One surface per account. The balance summary and the per-account
+        // report used to be two stacked blocks, so each account name and
+        // balance was printed twice on the same screen. They are merged here,
+        // and every account renders the same four figures in the same order,
+        // so the numbers stay comparable straight down a column.
+        <section className="account-overview" aria-label={t("overview.accountReportsAria")}>
+          <div className="account-overview-head" aria-hidden="true">
+            <span>{t("overview.accountAndCurrency")}</span>
+            <span>{t("overview.balance")}</span>
+            <span>{t("overview.openingBalance")}</span>
+            <span>{t("overview.netSpending")}</span>
+            <span>{t("overview.cashFlow")}</span>
+          </div>
+          <div className="account-overview-list">
+            {accountReports.map((report) => (
+              <div className="account-overview-row" key={report.id}>
+                <div className="account-overview-identity">
+                  <strong>{report.name}</strong>
+                  <span>{report.currency} · {t("overview.recordCount", { count: report.recordCount })}</span>
+                </div>
+                <dl className="account-overview-metrics">
+                  <div><dt>{t("overview.balance")}</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
+                  <div><dt>{t("overview.openingBalance")}</dt><dd>{formatAccountBalance(report.fundAdditionTotal, report.currency)}</dd></div>
+                  <div><dt>{t("overview.netSpending")}</dt><dd>{formatAccountBalance(report.netSpendingTotal, report.currency)}</dd></div>
+                  <div><dt>{t("overview.cashFlow")}</dt><dd>{formatAccountBalance(report.cashFlowTotal, report.currency)}</dd></div>
+                </dl>
+              </div>
+            ))}
+          </div>
+          {recordCount === 0 ? (
+            <p className="account-overview-empty">
+              {t("overview.noRecords")}
+              <button className="text-action" type="button" onClick={onCreateRecord}>{t("ledger.startRecord")}</button>
+            </p>
+          ) : null}
+        </section>
+      )}
       {syncIssues.length > 0 ? (
-        <Panel title="Sync attention" eyebrow="Action required">
-          <div className="sync-issues" aria-label="Cloud sync issues">
+        <Panel title={t("overview.syncAlerts")} eyebrow={t("overview.needsAction")}>
+          <div className="sync-issues" aria-label={t("overview.cloudSyncIssues")}>
             {syncIssues.map((item) => {
               const targetLabel = syncTargetLabel(item.target);
 
@@ -1801,12 +2020,12 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
                 <article className="sync-issue" key={item.id}>
                   <div>
                     <strong>{targetLabel}</strong>
-                    <span>{item.state === "conflict" ? "Conflict requires review; local data was not overwritten." : item.lastError || "Cloud write is waiting to be retried."}</span>
+                    <span>{item.state === "conflict" ? t("status.conflictReview") : item.lastError || t("status.waitingRetry")}</span>
                   </div>
                   {item.state === "conflict" ? (
-                    <span className="record-state-label">Review required</span>
+                    <span className="record-state-label">{t("status.needsReviewLabel")}</span>
                   ) : (
-                    <button className="text-action" type="button" onClick={() => onRetrySyncItem(item.id)}>Retry sync</button>
+                    <button className="text-action" type="button" onClick={() => onRetrySyncItem(item.id)}>{t("status.retrySync")}</button>
                   )}
                 </article>
               );
@@ -1814,44 +2033,6 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
           </div>
         </Panel>
       ) : null}
-      <Panel title="Account report" eyebrow="Accounting view">
-        {accountReports.length === 0 ? (
-          <p className="panel-copy">Add an account to see income, spending, refunds, transfers, and adjustments separately.</p>
-        ) : (
-          <div className="report-list" aria-label="Account report">
-            {accountReports.map((report) => (
-              <div className="report-row" key={report.id}>
-                <div>
-                  <strong>{report.name}</strong>
-                  <span>{report.currency} · {countLabel(report.recordCount, "record")}</span>
-                </div>
-                <dl>
-                  <div><dt>Balance</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
-                  <div><dt>Net spending</dt><dd>{formatAccountBalance(report.netSpendingTotal, report.currency)}</dd></div>
-                  <div><dt>Cash flow</dt><dd>{formatAccountBalance(report.cashFlowTotal, report.currency)}</dd></div>
-                </dl>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-      <section className="content-grid">
-        <Panel title="Start with a new record" eyebrow="First step">
-          <p className="panel-copy">
-            Manual records save directly to the local ledger after required fields pass validation.
-            Scans and imports remain drafts until you confirm them.
-          </p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
-            Start a record
-          </button>
-        </Panel>
-        <Panel title="Review before it counts" eyebrow="Data safety">
-          <p className="panel-copy">
-            Imported rows and scanned receipts stay in Review until you continue incomplete fields or
-            confirm the completed draft. Meal photos stay separate from ledger records.
-          </p>
-        </Panel>
-      </section>
     </div>
   );
 }
@@ -1861,6 +2042,7 @@ function ConfirmActionButton({ label, message, onConfirm }: Readonly<{
   message: string;
   onConfirm: () => void;
 }>) {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
 
   if (!confirming) {
@@ -1870,148 +2052,467 @@ function ConfirmActionButton({ label, message, onConfirm }: Readonly<{
   return (
     <div className="confirm-action" aria-label={message}>
       <span>{message}</span>
-      <button className="text-action danger-action" type="button" onClick={() => { onConfirm(); setConfirming(false); }}>Confirm</button>
-      <button className="text-action" type="button" onClick={() => setConfirming(false)}>Cancel</button>
+      <button className="text-action danger-action" type="button" onClick={() => { onConfirm(); setConfirming(false); }}>{t("common.confirm")}</button>
+      <button className="text-action" type="button" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
+    </div>
+  );
+}
+
+// --- Ledger filter & sort (明細篩選) ---
+// The confirmed list is grouped by type family (支出 / 收入 / 轉帳 / 調整),
+// filtered by account (chips), category, merchant/source, and free-text
+// search, and sorted by date, amount, merchant, or category.
+
+type LedgerFilterSort =
+  | "date-desc"
+  | "date-asc"
+  | "amount-desc"
+  | "amount-asc"
+  | "merchant-asc"
+  | "merchant-desc"
+  | "category-asc"
+  | "category-desc";
+
+type LedgerFilters = {
+  query: string;
+  accountName: string | null;
+  category: string | null;
+  merchant: string | null;
+  sort: LedgerFilterSort;
+};
+
+const defaultLedgerFilters: LedgerFilters = {
+  query: "",
+  accountName: null,
+  category: null,
+  merchant: null,
+  sort: "date-desc",
+};
+
+const ledgerSortOptions: ReadonlyArray<{ sort: LedgerFilterSort; labelKey: string }> = [
+  { sort: "date-desc", labelKey: "ledger.sortDateNewest" },
+  { sort: "date-asc", labelKey: "ledger.sortDateOldest" },
+  { sort: "amount-desc", labelKey: "ledger.sortAmountDesc" },
+  { sort: "amount-asc", labelKey: "ledger.sortAmountAsc" },
+  { sort: "merchant-asc", labelKey: "ledger.sortMerchantAsc" },
+  { sort: "merchant-desc", labelKey: "ledger.sortMerchantDesc" },
+  { sort: "category-asc", labelKey: "ledger.sortCategoryAsc" },
+  { sort: "category-desc", labelKey: "ledger.sortCategoryDesc" },
+];
+
+// Statistical-period records may not carry a precise localDate; fall back to
+// their period bounds, then to the creation date, so sorting stays stable.
+function ledgerRecordDateKey(record: LocalLedgerRecord): string {
+  return record.localDate || record.periodStart || record.periodEnd || record.createdAt.slice(0, 10);
+}
+
+function compareLedgerRecords(a: LocalLedgerRecord, b: LocalLedgerRecord, sort: LedgerFilterSort): number {
+  const byName = (record: LocalLedgerRecord) => record.counterparty || record.reason || record.itemName || "";
+  const byCategory = (record: LocalLedgerRecord) => record.category || record.reason || "";
+  switch (sort) {
+    case "date-desc":
+      return ledgerRecordDateKey(b).localeCompare(ledgerRecordDateKey(a)) || b.createdAt.localeCompare(a.createdAt);
+    case "date-asc":
+      return ledgerRecordDateKey(a).localeCompare(ledgerRecordDateKey(b)) || a.createdAt.localeCompare(b.createdAt);
+    case "amount-desc":
+      return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+    case "amount-asc":
+      return (Number(a.amount) || 0) - (Number(b.amount) || 0);
+    case "merchant-asc":
+      return byName(a).localeCompare(byName(b), "zh-Hant");
+    case "merchant-desc":
+      return byName(b).localeCompare(byName(a), "zh-Hant");
+    case "category-asc":
+      return byCategory(a).localeCompare(byCategory(b), "zh-Hant");
+    case "category-desc":
+      return byCategory(b).localeCompare(byCategory(a), "zh-Hant");
+  }
+}
+
+// Refund and 缺漏支出 roll into the 支出 family, fund additions into 收入,
+// so the history reads as money in / money out / movement / corrections.
+const ledgerSectionDefs: ReadonlyArray<{
+  key: string;
+  kinds: LocalLedgerRecord["kind"][];
+  labelKey: string;
+}> = [
+  { key: "expense", kinds: ["expense", "refund", "unresolved-expense"], labelKey: "kind.expense" },
+  { key: "income", kinds: ["income", "fund-addition"], labelKey: "kind.income" },
+  { key: "transfer", kinds: ["transfer"], labelKey: "kind.transfer" },
+  { key: "adjustment", kinds: ["adjustment"], labelKey: "kind.adjustment" },
+];
+
+function ledgerSectionSubtotals(records: LocalLedgerRecord[]): string {
+  const totals = new Map<string, number>();
+  for (const record of records) {
+    if (record.recordState === "voided") continue;
+    const amount = Number(record.amount) || 0;
+    totals.set(record.currency, (totals.get(record.currency) ?? 0) + amount);
+  }
+  return [...totals.entries()]
+    // Glue each code to its amount with a non-breaking space. The summary wraps
+    // once a section holds several currencies, and a normal space lets the
+    // break land inside a total, leaving "JPY" stranded above its own number.
+    .map(([currency, total]) => formatAccountBalance(total, currency).replace(" ", "\u00A0"))
+    .join(" · ");
+}
+
+type LedgerFilterDropdownItem = {
+  id: string;
+  name: string;
+  count?: number;
+};
+
+// Popover select for category / merchant / sort: a button that opens a
+// searchable option list and closes on an outside tap (same pattern as the
+// per-record overflow menu).
+function LedgerFilterDropdown({
+  label,
+  ariaLabel,
+  value,
+  items,
+  onChange,
+  searchable = true,
+  showCount = true,
+}: Readonly<{
+  label: string;
+  ariaLabel: string;
+  value: string | null;
+  items: LedgerFilterDropdownItem[];
+  onChange: (id: string | null) => void;
+  searchable?: boolean;
+  showCount?: boolean;
+}>) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visible = normalizedQuery
+    ? items.filter((item) => item.name.toLowerCase().includes(normalizedQuery))
+    : items;
+
+  return (
+    <div className="ledger-select" ref={rootRef}>
+      <button
+        type="button"
+        className={`filter-button ${value ? "active" : ""}`}
+        aria-label={value ? `${label}: ${value}` : label}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="filter-button-label">{label}</span>
+        {value ? <strong className="filter-button-value">{value}</strong> : null}
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="filter-popover" role="listbox" aria-label={ariaLabel}>
+          {searchable ? (
+            <input
+              className="filter-popover-search"
+              type="search"
+              value={query}
+              placeholder={t("ledger.filterSearchPlaceholder")}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          ) : null}
+          <button
+            type="button"
+            role="option"
+            aria-selected={value === null}
+            className={value === null ? "selected" : ""}
+            onClick={() => { onChange(null); setOpen(false); setQuery(""); }}
+          >
+            <span>{t("ledger.filterAll")}</span>
+          </button>
+          {visible.map((item) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === item.id}
+              className={value === item.id ? "selected" : ""}
+              key={item.id}
+              onClick={() => { onChange(item.id); setOpen(false); setQuery(""); }}
+            >
+              <span className="filter-option-name">{item.name}</span>
+              {showCount && item.count !== undefined ? (
+                <span className="filter-option-count">{t("ledger.sectionCount", { count: item.count })}</span>
+              ) : null}
+            </button>
+          ))}
+          {visible.length === 0 ? <p className="filter-popover-empty">{t("ledger.filterNoMatch")}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LedgerFilterBar({
+  accountOptions,
+  categoryOptions,
+  merchantOptions,
+  filters,
+  onChange,
+}: Readonly<{
+  accountOptions: string[];
+  categoryOptions: LedgerFilterDropdownItem[];
+  merchantOptions: LedgerFilterDropdownItem[];
+  filters: LedgerFilters;
+  onChange: (filters: LedgerFilters) => void;
+}>) {
+  const { t } = useI18n();
+  const hasActiveFilters = Boolean(
+    filters.query.trim() || filters.accountName || filters.category || filters.merchant,
+  );
+  const selectedSort = ledgerSortOptions.find((option) => option.sort === filters.sort) ?? ledgerSortOptions[0];
+  return (
+    <div className="ledger-filter-bar" aria-label={t("ledger.filtersAria")} role="group">
+      <div className="ledger-filter-row">
+        <div className="ledger-search">
+          <Search size={14} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label={t("ledger.searchAria")}
+            placeholder={t("ledger.searchPlaceholder")}
+            value={filters.query}
+            onChange={(event) => onChange({ ...filters, query: event.target.value })}
+          />
+        </div>
+        {hasActiveFilters ? (
+          <button type="button" className="filter-clear" onClick={() => onChange(defaultLedgerFilters)}>
+            <X size={14} aria-hidden="true" />
+            {t("ledger.clearFilters")}
+          </button>
+        ) : null}
+      </div>
+      <div className="ledger-account-chips" role="group" aria-label={t("ledger.filterAccount")}>
+        <button
+          type="button"
+          className={`account-chip ${filters.accountName === null ? "active" : ""}`}
+          aria-pressed={filters.accountName === null}
+          onClick={() => onChange({ ...filters, accountName: null })}
+        >
+          {t("ledger.filterAll")}
+        </button>
+        {accountOptions.map((accountName) => {
+          const active = filters.accountName === accountName;
+          return (
+            <button
+              type="button"
+              className={`account-chip ${active ? "active" : ""}`}
+              aria-pressed={active}
+              key={accountName}
+              onClick={() => onChange({ ...filters, accountName: active ? null : accountName })}
+            >
+              {accountName}
+            </button>
+          );
+        })}
+      </div>
+      <div className="ledger-filter-row">
+        <LedgerFilterDropdown
+          label={t("ledger.filterCategory")}
+          ariaLabel={t("ledger.filterCategory")}
+          value={filters.category}
+          items={categoryOptions}
+          onChange={(category) => onChange({ ...filters, category })}
+        />
+        <LedgerFilterDropdown
+          label={t("ledger.filterMerchant")}
+          ariaLabel={t("ledger.filterMerchant")}
+          value={filters.merchant}
+          items={merchantOptions}
+          onChange={(merchant) => onChange({ ...filters, merchant })}
+        />
+        <LedgerFilterDropdown
+          label={t("ledger.sort")}
+          ariaLabel={t("ledger.sort")}
+          value={t(selectedSort.labelKey)}
+          items={ledgerSortOptions.map((option) => ({ id: option.sort, name: t(option.labelKey) }))}
+          searchable={false}
+          showCount={false}
+          onChange={(sort) => { if (sort) onChange({ ...filters, sort: sort as LedgerFilterSort }); }}
+        />
+      </div>
     </div>
   );
 }
 
 type LedgerRecordCardProps = {
   record: LocalLedgerRecord;
-  isEditing: boolean;
-  isEditingUnresolved: boolean;
   onEdit: () => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (patch: Partial<EditableRecordFields>) => void;
-  onCompleteDetails: () => void;
-  onCancelDetails: () => void;
-  onConvertDetails: (fields: UnresolvedExpenseConversion) => boolean;
-  onUpdate: (patch: Partial<EditableRecordFields>) => void;
-  onVoid: () => void;
+  onDelete: () => void;
+  deleteAction: DeleteAction;
 };
 
-function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onVoid }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onVoid"> & { isVoided: boolean }>) {
-  if (isVoided) return <span className="record-state-label">Voided</span>;
+// Row-level actions stay icon-only: edit opens the floating record dialog
+// (which hosts the context actions that used to live in the ⋯ overflow menu),
+// and delete opens a proper confirm dialog instead of an inline box.
+function LedgerRecordActions({ isVoided, onEdit, onDelete, deleteAction }: Readonly<{
+  isVoided: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleteAction: DeleteAction;
+}>) {
+  const { t } = useI18n();
+  if (isVoided) return <span className="record-state-label">{t("ledger.voided")}</span>;
 
-  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  const hardDelete = deleteAction === "hard-delete";
+  const deleteLabel = hardDelete ? t("ledger.delete") : t("ledger.void");
   return (
     <div className="record-actions">
-      {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>Complete details</button> : null}
-      {isRecurring ? <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>{record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}</button> : null}
-      {isRecurring ? <ConfirmActionButton label="Cancel recurring" message="Cancel future recurrence?" onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
-      <button className="text-action" type="button" onClick={onEdit}>Edit</button>
-      <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onVoid} />
+      <button className="icon-action" type="button" aria-label={t("ledger.edit")} title={t("ledger.edit")} onClick={onEdit}><Pencil size={16} aria-hidden="true" /></button>
+      <button className="icon-action" type="button" aria-label={deleteLabel} title={deleteLabel} onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></button>
     </div>
   );
 }
 
-function LedgerRecordCard({
-  record,
-  isEditing,
-  isEditingUnresolved,
-  onEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onCompleteDetails,
-  onCancelDetails,
-  onConvertDetails,
-  onUpdate,
-  onVoid,
-}: Readonly<LedgerRecordCardProps>) {
-  if (isEditingUnresolved && record.recordState !== "voided") {
-    return <UnresolvedExpenseEditor record={record} onCancel={onCancelDetails} onConvert={onConvertDetails} />;
-  }
-
-  if (isEditing && record.recordState !== "voided") {
-    return <RecordEditor record={record} onCancel={onCancelEdit} onSave={onSaveEdit} />;
-  }
-
+function LedgerRecordCard({ record, onEdit, onDelete, deleteAction }: Readonly<LedgerRecordCardProps>) {
   const isVoided = record.recordState === "voided";
-  const statusLabel = ledgerRecordStatusLabel(record, isVoided);
+  const { t } = useI18n();
+  // The title, merchant, and account · category line can all be shortened by
+  // an ellipsis, and an ellipsis changes what is painted, not what exists: the
+  // full value goes in a title so a clipped account name is still readable
+  // instead of lost. The date carries the same affordance; the amount, the
+  // currency, and the actions are never shortened and need none.
+  const itemName = recordTitle(record);
+  const merchantName = record.counterparty || record.reason;
+  const metaLine = recordMetaLine(record);
   return (
     <article className={`draft-card ledger-record-card ${isVoided ? "voided-record" : ""}`}>
-      <div className="record-summary">
-        <strong>{recordDisplayName(record)}</strong>
-        <span className="record-detail">{recordDetailLine(record)}</span>
-      </div>
+      <span className="record-date" title={record.localDate || record.periodStart || record.periodEnd || ""}>{recordShortDate(record)}</span>
+      <span className="record-name">
+        <strong className="record-item" title={itemName}>{itemName}</strong>
+        {record.itemName && !record.itemNameMissing ? <span className="record-merchant" title={merchantName}>{merchantName}</span> : null}
+      </span>
+      <span className="record-meta">
+        <span className="record-detail-line" title={metaLine}>{metaLine}</span>
+      </span>
+      {record.status === "local-only" && !isVoided ? <em className="record-status">{t("ledger.localOnly")}</em> : null}
       <div className="draft-amount record-amount">
-        <strong>{record.currency} {record.amount}</strong>
-        <span>{record.kind} · {statusLabel}</span>
+        <strong>{formatAmountString(record.amount, record.currency)}</strong>
       </div>
-      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onVoid={onVoid} />
+      <LedgerRecordActions isVoided={isVoided} onEdit={onEdit} onDelete={onDelete} deleteAction={deleteAction} />
     </article>
   );
-}
-
-function ledgerRecordStatusLabel(record: LocalLedgerRecord, isVoided: boolean): string {
-  if (isVoided) return "Voided";
-  return record.status === "synced" ? "Synced" : "Local only";
 }
 
 function LedgerPage({
   records,
   drafts,
-  accounts,
   navigate,
   onDiscardDraft,
   onEditDraft,
   onConfirmDraft,
   onUpdateRecord,
   onConvertUnresolved,
-  onVoidRecord,
-  onAddAccount,
-  onSaveInitialFunding,
-  onReopenOnboarding,
+  onDeleteRecord,
+  deleteAction,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
-  accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
   onEditDraft: (draft: TransactionDraft) => void;
   onConfirmDraft: (draft: TransactionDraft) => boolean;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
-  onVoidRecord: (id: string) => void;
-  onAddAccount: (account: LocalAccount) => void;
-  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onReopenOnboarding: () => void;
+  onDeleteRecord: (id: string) => void;
+  deleteAction: DeleteAction;
 }>) {
+  const { t } = useI18n();
   const draftCount = drafts.length;
-  const [section, setSection] = useState<"records" | "accounts">("records");
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
+  const [deleteConfirmRecordId, setDeleteConfirmRecordId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
+  const editingRecord = editingRecordId ? records.find((item) => item.id === editingRecordId) ?? null : null;
+  const editingUnresolved = editingUnresolvedId ? records.find((item) => item.id === editingUnresolvedId) ?? null : null;
+  const deleteConfirmRecord = deleteConfirmRecordId ? records.find((item) => item.id === deleteConfirmRecordId) ?? null : null;
+  const hardDelete = deleteAction === "hard-delete";
   return (
-    <div className="route-stack">
-      <div className="settings-tabs ledger-tabs" role="tablist" aria-label="Ledger sections">
-        <button className={`settings-tab ${section === "records" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "records"} onClick={() => setSection("records")}>Records</button>
-        <button className={`settings-tab ${section === "accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "accounts"} onClick={() => setSection("accounts")}>Accounts</button>
-      </div>
-      {section === "accounts" ? (
-        <LedgerAccountsPanel accounts={accounts} onAddAccount={onAddAccount} onSaveInitialFunding={onSaveInitialFunding} onReopenOnboarding={onReopenOnboarding} />
-      ) : (
-        <LedgerRecordsView
-          records={records}
-          drafts={drafts}
-          draftCount={draftCount}
-          draftMessage={draftMessage}
-          editingRecordId={editingRecordId}
-          editingUnresolvedId={editingUnresolvedId}
-          navigate={navigate}
-          onEditDraft={onEditDraft}
-          onConfirmDraft={onConfirmDraft}
-          onDiscardDraft={onDiscardDraft}
-          onUpdateRecord={onUpdateRecord}
-          onConvertUnresolved={onConvertUnresolved}
-          onVoidRecord={onVoidRecord}
-          onBeginEditRecord={setEditingRecordId}
-          onEndEditRecord={() => setEditingRecordId(null)}
-          onBeginUnresolved={setEditingUnresolvedId}
-          onEndUnresolved={() => setEditingUnresolvedId(null)}
-          onReportDraftMessage={setDraftMessage}
+    <div className="route-stack ledger-page">
+      <LedgerRecordsView
+        records={records}
+        drafts={drafts}
+        draftCount={draftCount}
+        draftMessage={draftMessage}
+        navigate={navigate}
+        onEditDraft={onEditDraft}
+        onConfirmDraft={onConfirmDraft}
+        onDiscardDraft={onDiscardDraft}
+        onUpdateRecord={onUpdateRecord}
+        onConvertUnresolved={onConvertUnresolved}
+        onDeleteRecord={onDeleteRecord}
+        deleteAction={deleteAction}
+        onBeginEditRecord={setEditingRecordId}
+        onBeginDeleteRecord={setDeleteConfirmRecordId}
+        onReportDraftMessage={setDraftMessage}
+      />
+      {editingRecord ? (
+        <EditorDialog
+          title={t("ledger.editRecordTitle", { name: recordDisplayName(editingRecord) })}
+          onClose={() => setEditingRecordId(null)}
+        >
+          <RecordEditor
+            record={editingRecord}
+            onCancel={() => setEditingRecordId(null)}
+            onSave={(patch) => { onUpdateRecord(editingRecord.id, patch); setEditingRecordId(null); }}
+            onCompleteDetails={() => {
+              setEditingRecordId(null);
+              setEditingUnresolvedId(editingRecord.id);
+            }}
+            onUpdate={(patch) => onUpdateRecord(editingRecord.id, patch)}
+          />
+        </EditorDialog>
+      ) : null}
+      {editingUnresolved ? (
+        <EditorDialog
+          title={t("ledger.completeEditorTitle", { name: recordDisplayName(editingUnresolved) })}
+          onClose={() => setEditingUnresolvedId(null)}
+        >
+          <UnresolvedExpenseEditor
+            record={editingUnresolved}
+            onCancel={() => setEditingUnresolvedId(null)}
+            onConvert={(fields) => {
+              const converted = onConvertUnresolved(editingUnresolved.id, fields);
+              if (converted) setEditingUnresolvedId(null);
+              return converted;
+            }}
+          />
+          <div className="record-dialog-actions">
+            <button className="quiet-action" type="button" onClick={() => {
+              setEditingUnresolvedId(null);
+              setEditingRecordId(editingUnresolved.id);
+            }}>
+              {t("ledger.backToEdit")}
+            </button>
+          </div>
+        </EditorDialog>
+      ) : null}
+      {deleteConfirmRecord ? (
+        <ConfirmActionDialog
+          title={hardDelete ? t("ledger.delete") : t("ledger.void")}
+          message={hardDelete ? t("ledger.deleteConfirm") : t("ledger.voidConfirm")}
+          onCancel={() => setDeleteConfirmRecordId(null)}
+          onConfirm={() => { onDeleteRecord(deleteConfirmRecord.id); setDeleteConfirmRecordId(null); }}
         />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -2021,94 +2522,146 @@ function LedgerRecordsView({
   drafts,
   draftCount,
   draftMessage,
-  editingRecordId,
-  editingUnresolvedId,
   navigate,
   onEditDraft,
   onConfirmDraft,
   onDiscardDraft,
   onUpdateRecord,
   onConvertUnresolved,
-  onVoidRecord,
+  onDeleteRecord,
+  deleteAction,
   onBeginEditRecord,
-  onEndEditRecord,
-  onBeginUnresolved,
-  onEndUnresolved,
+  onBeginDeleteRecord,
   onReportDraftMessage,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
   draftCount: number;
   draftMessage: string;
-  editingRecordId: string | null;
-  editingUnresolvedId: string | null;
   navigate: (item: NavItem) => void;
   onEditDraft: (draft: TransactionDraft) => void;
   onConfirmDraft: (draft: TransactionDraft) => boolean;
   onDiscardDraft: (id: string) => void;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
-  onVoidRecord: (id: string) => void;
+  onDeleteRecord: (id: string) => void;
+  deleteAction: DeleteAction;
   onBeginEditRecord: (id: string) => void;
-  onEndEditRecord: () => void;
-  onBeginUnresolved: (id: string) => void;
-  onEndUnresolved: () => void;
+  onBeginDeleteRecord: (id: string) => void;
   onReportDraftMessage: (message: string) => void;
 }>) {
+  const { t } = useI18n();
+  const [filters, setFilters] = useState<LedgerFilters>(defaultLedgerFilters);
+  const ledgerEntries = records.filter((record) => !isOpeningBalance(record));
+
+  const accountOptions = useMemo(() => {
+    const names = new Set(ledgerEntries.map((record) => record.accountName).filter(Boolean));
+    return [...names].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  }, [ledgerEntries]);
+
+  const buildOptions = useCallback((pick: (record: LocalLedgerRecord) => string | null) => {
+    const counts = new Map<string, number>();
+    for (const record of ledgerEntries) {
+      const name = pick(record);
+      if (!name) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "zh-Hant"))
+      .map(([name, count]) => ({ id: name, name, count }));
+  }, [ledgerEntries]);
+
+  const categoryOptions = useMemo(
+    () => buildOptions((record) => record.category.trim() || null),
+    [buildOptions],
+  );
+  const merchantOptions = useMemo(
+    () => buildOptions((record) => (record.counterpartyMissing ? null : record.counterparty.trim() || null)),
+    [buildOptions],
+  );
+
+  const visibleRecords = useMemo(() => {
+    let list = ledgerEntries;
+    if (filters.accountName) list = list.filter((record) => record.accountName === filters.accountName);
+    if (filters.category) list = list.filter((record) => record.category === filters.category);
+    if (filters.merchant) list = list.filter((record) => record.counterparty === filters.merchant);
+    const query = filters.query.trim().toLowerCase();
+    if (query) {
+      list = list.filter((record) => [record.counterparty, record.category, record.itemName, record.accountName, record.reason, record.note]
+        .some((value) => (value ?? "").toLowerCase().includes(query)));
+    }
+    return [...list].sort((a, b) => compareLedgerRecords(a, b, filters.sort));
+  }, [filters, ledgerEntries]);
+
+  const sections = useMemo(() => ledgerSectionDefs
+    .map((def) => ({ def, records: visibleRecords.filter((record) => def.kinds.includes(record.kind)) }))
+    .filter((section) => section.records.length > 0), [visibleRecords]);
+
   return (
     <>
-      <section className="content-grid">
-        <Panel title="Ledger records" eyebrow="Confirmed records">
-          <p className="panel-copy">Manual records are written locally as official ledger records. Cloud status appears in the workspace header.</p>
+      <header className="ledger-toolbar">
+        <h2>{t("ledger.confirmedPanel")} <span>{ledgerEntries.length}</span></h2>
+        {ledgerEntries.length > 0 ? (
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
-            Start a record
+            <Plus size={18} aria-hidden="true" />
+            {t("ledger.startRecord")}
           </button>
-        </Panel>
-        <Panel title={draftCount > 0 ? "Drafts waiting" : "Review queue"} eyebrow="Next action">
-          <p className="panel-copy">
-            {draftCount > 0 ? draftReviewCopy(draftCount) : "No drafts waiting. New scans and imports will appear here after capture."}
-          </p>
-        </Panel>
-      </section>
-      {records.length > 0 ? (
-        <section className="draft-list" aria-label="Confirmed ledger records">
+        ) : null}
+      </header>
+      {ledgerEntries.length > 0 ? (
+        <section className="ledger-history" aria-label={t("draft.confirmedListAria")}>
           <div className="draft-list-heading">
             <div>
-              <p className="eyebrow">Confirmed records</p>
-              <h2>Ledger history</h2>
+              <p className="eyebrow">{t("draft.confirmedEyebrow")}</p>
+              <h2>{t("draft.historyTitle")}</h2>
             </div>
-            <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
+            <span>{t("draft.recordCount", { count: visibleRecords.length })}</span>
           </div>
-          {records.map((record) => (
-            <LedgerRecordCard
-              key={record.id}
-              record={record}
-              isEditing={editingRecordId === record.id}
-              isEditingUnresolved={editingUnresolvedId === record.id}
-              onEdit={() => onBeginEditRecord(record.id)}
-              onCancelEdit={onEndEditRecord}
-              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); onEndEditRecord(); }}
-              onCompleteDetails={() => onBeginUnresolved(record.id)}
-              onCancelDetails={onEndUnresolved}
-              onConvertDetails={(fields) => {
-                const converted = onConvertUnresolved(record.id, fields);
-                if (converted) onEndUnresolved();
-                return converted;
-              }}
-              onUpdate={(patch) => onUpdateRecord(record.id, patch)}
-              onVoid={() => onVoidRecord(record.id)}
-            />
-          ))}
+          <LedgerFilterBar
+            accountOptions={accountOptions}
+            categoryOptions={categoryOptions}
+            merchantOptions={merchantOptions}
+            filters={filters}
+            onChange={setFilters}
+          />
+          {visibleRecords.length === 0 ? (
+            <p className="table-empty">{t("ledger.filterEmpty")}</p>
+          ) : null}
+          {sections.map(({ def, records: sectionRecords }) => {
+            const subtotal = ledgerSectionSubtotals(sectionRecords);
+            return (
+              <section className="ledger-kind-section" key={def.key}>
+                <div className="ledger-section-heading">
+                  <h3>{t(def.labelKey)}</h3>
+                  <span>
+                    {t("ledger.sectionCount", { count: sectionRecords.length })}
+                    {subtotal ? ` · ${t("ledger.sectionSubtotal", { total: subtotal })}` : ""}
+                  </span>
+                </div>
+                <div className="ledger-section-rows">
+                  {sectionRecords.map((record) => (
+                    <LedgerRecordCard
+                      key={record.id}
+                      record={record}
+                      onEdit={() => onBeginEditRecord(record.id)}
+                      onDelete={() => onBeginDeleteRecord(record.id)}
+                      deleteAction={deleteAction}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </section>
       ) : null}
       {draftCount > 0 ? (
-        <section className="draft-list" aria-label="Draft records waiting for review">
+        <section className="draft-list" aria-label={t("draft.pendingListAria")}>
           <div className="draft-list-heading">
             <div>
-              <p className="eyebrow">Review queue</p>
-              <h2>Drafts waiting</h2>
+              <p className="eyebrow">{t("draft.queueEyebrow")}</p>
+              <h2>{t("draft.pendingHeading")}</h2>
             </div>
-            <span>{draftCount} local draft{draftCount === 1 ? "" : "s"}</span>
+            <span>{t("draft.localDraftCount", { count: draftCount })}</span>
           </div>
           {drafts.map((draft) => (
             <LedgerDraftCard
@@ -2123,7 +2676,7 @@ function LedgerRecordsView({
         </section>
       ) : null}
       {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
-      {records.length === 0 ? <p className="table-empty">No confirmed ledger records yet.</p> : null}
+      {ledgerEntries.length === 0 ? <section className="workspace-empty"><ReceiptText size={32} aria-hidden="true" /><p>{t("draft.emptyConfirmed")}</p><button className="primary-action" type="button" onClick={() => navigate(navItemFor("capture"))}><Plus size={18} aria-hidden="true" />{t("ledger.startRecord")}</button></section> : null}
     </>
   );
 }
@@ -2135,34 +2688,35 @@ function LedgerDraftCard({ draft, onEditDraft, onConfirmDraft, onDiscardDraft, o
   onDiscardDraft: (id: string) => void;
   onReportDraftMessage: (message: string) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <article className="draft-card">
       <div>
         <strong>{draftDisplayName(draft)}</strong>
         <span>
           {draft.date} · {draft.account}
-          {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
+          {draft.kind === "transfer" ? ` · ${t("draft.transferSuffix", { target: draft.transferAccount })}` : ` · ${draft.category}`}
         </span>
       </div>
       <div className="draft-amount">
         <strong>
           {draft.currency} {draft.amount}
         </strong>
-        <span>{draft.kind}</span>
+        <span>{kindLabel(draft.kind)}</span>
       </div>
       <div className="record-actions">
         <button className="secondary-action" type="button" onClick={() => onEditDraft(draft)}>
-          Continue in Capture
+          {t("draft.editOnAddPage")}
         </button>
         <button
           className="primary-action"
           type="button"
-          onClick={() => onReportDraftMessage(onConfirmDraft(draft) ? "Draft confirmed in the local ledger." : "This draft is incomplete. Continue in Capture to fill the required fields.")}
+          onClick={() => onReportDraftMessage(onConfirmDraft(draft) ? t("draft.confirmedMessage") : t("draft.incompleteMessage"))}
         >
-          Confirm to ledger
+          {t("draft.confirmWrite")}
         </button>
         <button className="text-action danger-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
-          Discard
+          {t("draft.discard")}
         </button>
       </div>
     </article>
@@ -2185,6 +2739,7 @@ function UnresolvedExpenseEditor({
   const [itemName, setItemName] = useState(record.itemName);
   const [itemNameMissing, setItemNameMissing] = useState(record.itemNameMissing);
   const [error, setError] = useState("");
+  const { t } = useI18n();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2199,50 +2754,110 @@ function UnresolvedExpenseEditor({
     });
 
     if (!converted) {
-      setError("Add a date, category, and valid merchant/item details before converting.");
+      setError(t("ledger.convertError"));
     }
   };
 
   return (
-    <form className="record-editor" aria-label={`Complete ${recordDisplayName(record)}`} onSubmit={handleSubmit}>
-      <label>
-        <span>Date</span>
-        <input required type="date" value={localDate} onChange={(event) => setLocalDate(event.target.value)} />
-      </label>
-      <label>
-        <span>Category</span>
-        <input required value={category} onChange={(event) => setCategory(event.target.value)} />
-      </label>
-      <div className="form-field">
-        <label htmlFor={`unresolved-merchant-${record.id}`}>Merchant</label>
-        <input id={`unresolved-merchant-${record.id}`} required pattern=".*\S.*" disabled={counterpartyMissing} value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
-        <label className="checkbox-field inline-checkbox">
-          <input type="checkbox" checked={counterpartyMissing} onChange={(event) => {
-            const missing = event.target.checked;
-            setCounterpartyMissing(missing);
-            setCounterparty(missing ? missingCounterpartyLabel : "");
-          }} />
-          <span>Merchant unavailable</span>
+    <form className="record-editor" aria-label={t("ledger.completeEditorTitle", { name: recordDisplayName(record) })} onSubmit={handleSubmit}>
+      <div className="record-editor-fields">
+        <label>
+          <span>{t("field.date")}</span>
+          <input required type="date" value={localDate} onChange={(event) => setLocalDate(event.target.value)} />
         </label>
-      </div>
-      <div className="form-field">
-        <label htmlFor={`unresolved-item-${record.id}`}>Item name</label>
-        <input id={`unresolved-item-${record.id}`} required pattern=".*\S.*" disabled={itemNameMissing} value={itemName} onChange={(event) => setItemName(event.target.value)} />
-        <label className="checkbox-field inline-checkbox">
-          <input type="checkbox" checked={itemNameMissing} onChange={(event) => {
-            const missing = event.target.checked;
-            setItemNameMissing(missing);
-            setItemName(missing ? missingItemNameLabel : "");
-          }} />
-          <span>Item unavailable</span>
+        <label>
+          <span>{t("field.category")}</span>
+          <input required value={category} onChange={(event) => setCategory(event.target.value)} />
         </label>
+        <div className="form-field">
+          <label htmlFor={`unresolved-merchant-${record.id}`}>{t("field.merchant")}</label>
+          <input id={`unresolved-merchant-${record.id}`} required pattern=".*\S.*" disabled={counterpartyMissing} value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
+          <label className="checkbox-field inline-checkbox">
+            <input type="checkbox" checked={counterpartyMissing} onChange={(event) => {
+              const missing = event.target.checked;
+              setCounterpartyMissing(missing);
+              setCounterparty(missing ? missingCounterpartyLabel : "");
+            }} />
+            <span>{t("field.merchantMissing")}</span>
+          </label>
+        </div>
+        <div className="form-field">
+          <label htmlFor={`unresolved-item-${record.id}`}>{t("field.itemName")}</label>
+          <input id={`unresolved-item-${record.id}`} required pattern=".*\S.*" disabled={itemNameMissing} value={itemName} onChange={(event) => setItemName(event.target.value)} />
+          <label className="checkbox-field inline-checkbox">
+            <input type="checkbox" checked={itemNameMissing} onChange={(event) => {
+              const missing = event.target.checked;
+              setItemNameMissing(missing);
+              setItemName(missing ? missingItemNameLabel : "");
+            }} />
+            <span>{t("field.itemNameMissing")}</span>
+          </label>
+        </div>
+        {error ? <p className="form-error full-span" role="alert">{error}</p> : null}
       </div>
-      {error ? <p className="form-error full-span" role="alert">{error}</p> : null}
-      <div className="record-editor-actions full-span">
-        <button className="primary-action" type="submit">Convert to expense</button>
-        <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
+      <div className="record-editor-footer full-span">
+        <div className="record-editor-actions">
+          <button className="primary-action" type="submit">{t("ledger.convertToExpense")}</button>
+          <button className="quiet-action" type="button" onClick={onCancel}>{t("ledger.cancel")}</button>
+        </div>
       </div>
     </form>
+  );
+}
+
+// Delete / void confirmation as a proper dialog instead of a cramped inline box.
+function ConfirmActionDialog({ title, message, onConfirm, onCancel }: Readonly<{
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}>) {
+  const { t } = useI18n();
+  return (
+    <EditorDialog title={title} onClose={onCancel}>
+      <p className="confirm-dialog-message">{message}</p>
+      <div className="confirm-dialog-actions">
+        <button className="danger-action" type="button" onClick={onConfirm}>{t("common.confirm")}</button>
+        <button className="quiet-action" type="button" onClick={onCancel}>{t("common.cancel")}</button>
+      </div>
+    </EditorDialog>
+  );
+}
+
+// Floating editor overlay: the record list stays put while the editor opens
+// on top (no push-down reflow), with Esc / backdrop click / ✕ to close.
+function EditorDialog({ title, onClose, children }: Readonly<{ title: string; onClose: () => void; children: ReactNode }>) {
+  const { t } = useI18n();
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    // Lock both body and html so no viewport scrollbar can ever appear while
+    // the dialog is open (body overflow alone does not hide the html one).
+    const previousOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div className="editor-backdrop" onClick={onClose}>
+      <div className="editor-panel" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
+        <div className="editor-panel-header">
+          <strong>{title}</strong>
+          <button type="button" className="icon-action" aria-label={t("common.close")} title={t("common.close")} onClick={onClose}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="editor-panel-body">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -2250,10 +2865,14 @@ function RecordEditor({
   record,
   onSave,
   onCancel,
+  onCompleteDetails,
+  onUpdate,
 }: Readonly<{
   record: LocalLedgerRecord;
   onSave: (patch: Partial<EditableRecordFields>) => void;
   onCancel: () => void;
+  onCompleteDetails?: () => void;
+  onUpdate?: (patch: Partial<EditableRecordFields>) => void;
 }>) {
   const [amount, setAmount] = useState(record.amount);
   const [category, setCategory] = useState(record.category);
@@ -2261,36 +2880,190 @@ function RecordEditor({
   const [itemName, setItemName] = useState(record.itemName);
   const [reason, setReason] = useState(record.reason);
   const [note, setNote] = useState(record.note);
+  const [recurrenceChoice, setRecurrenceChoice] = useState<RecurrenceChoice>(record.recurrenceChoice);
+  const [recurrenceAmountMode, setRecurrenceAmountMode] = useState<RecurrenceAmountMode>(record.recurrenceAmountMode);
+  const { t } = useI18n();
+  // Same rule as the capture form: only expenses, income, and transfers carry
+  // a next-cycle intent.
+  const supportsRecurrence = record.kind === "expense" || record.kind === "income" || record.kind === "transfer";
+  const autoRecordAllowed = recurrenceAmountMode === "fixed" && Boolean(amount.trim());
+  // Records without an active cycle keep the next-cycle controls collapsed to
+  // a one-line entry point, so a plain amount edit stays short. Recurring
+  // records show a compact summary with the pause/cancel controls and expand
+  // the full behavior settings on demand — keeping the dialog short enough to
+  // fit without internal scrolling.
+  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  const [recurrenceExpanded, setRecurrenceExpanded] = useState(false);
+  const behaviorLabel = recurrenceChoice === "auto-record-next-cycle"
+    ? t("capture.autoRecordNextCycle")
+    : recurrenceChoice === "prompt-next-cycle"
+      ? t("capture.promptNextCycle")
+      : t("capture.currentCycleOnly");
+  const amountModeLabel = recurrenceAmountMode === "variable" ? t("ledger.variableAmount") : t("ledger.fixedAmount");
 
   return (
-    <form className="record-editor" aria-label={`Edit ${recordDisplayName(record)}`} onSubmit={(event) => {
+    <form className="record-editor" aria-label={t("ledger.editRecordTitle", { name: recordDisplayName(record) })} onSubmit={(event) => {
       event.preventDefault();
-      onSave({ amount, category, counterparty, itemName, reason, note });
+      const patch: Partial<EditableRecordFields> = { amount, category, counterparty, itemName, reason, note };
+      if (supportsRecurrence && (
+        recurrenceChoice !== record.recurrenceChoice
+        || recurrenceAmountMode !== record.recurrenceAmountMode
+      )) {
+        patch.recurrenceChoice = recurrenceChoice;
+        patch.recurrenceAmountMode = recurrenceAmountMode;
+        // Choosing a next-cycle intent marks the record as recurring; going
+        // back to current-cycle-only turns the recurrence off again.
+        patch.recurrenceStatus = recurrenceChoice === "current-cycle-only" ? "inactive" : "active";
+      }
+      onSave(patch);
     }}>
-      <AmountField id="record-editor-amount" label="Amount" required value={amount} allowNegative={record.kind === "adjustment"} onChange={setAmount} />
+      <div className="record-editor-fields">
+      <AmountField id="record-editor-amount" label={t("field.amount")} currency={record.currency} required value={amount} allowNegative={record.kind === "adjustment"} onChange={setAmount} />
       <label>
-        <span>Category</span>
+        <span>{t("field.category")}</span>
         <input value={category} onChange={(event) => setCategory(event.target.value)} />
       </label>
       <label>
-        <span>Merchant / source</span>
+        <span>{counterpartyLabelForKind(record.kind)}</span>
         <input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
       </label>
-      <label>
-        <span>Item name</span>
+      {/* When the reason field is hidden (non-adjustment records without
+          imported/voice reason data) the item-name field must span the full
+          grid width — otherwise it sits alone in the left column with an
+          empty half next to it. */}
+      <label className={record.kind === "adjustment" || Boolean(reason.trim()) ? undefined : "full-span"}>
+        <span>{t("field.itemName")}</span>
         <input value={itemName} onChange={(event) => setItemName(event.target.value)} />
       </label>
-      <label>
-        <span>Reason</span>
-        <input value={reason} onChange={(event) => setReason(event.target.value)} />
-      </label>
+      {/* 原因 only belongs to adjustments (調整原因, like the capture form);
+          for other kinds it is a redundant free-text field, so it stays hidden
+          unless the record already carries a reason from import/voice. */}
+      {record.kind === "adjustment" || Boolean(reason.trim()) ? (
+        <label>
+          <span>{record.kind === "adjustment" ? t("field.adjustmentReason") : t("field.reason")}</span>
+          <input value={reason} onChange={(event) => setReason(event.target.value)} />
+        </label>
+      ) : null}
       <label className="full-span">
-        <span>Note</span>
+        <span>{t("field.note")}</span>
         <textarea value={note} onChange={(event) => setNote(event.target.value)} />
       </label>
-      <div className="record-editor-actions full-span">
-        <button className="primary-action" type="submit">Save changes</button>
-        <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
+      {supportsRecurrence && (isRecurring || recurrenceExpanded) ? (
+        <fieldset className="recurrence-control full-span" aria-label={t("capture.nextCycleLegend")}>
+          <legend>
+            {t("capture.nextCycleLegend")}
+            {recurrenceExpanded && recurrenceChoice !== "current-cycle-only" ? (
+              <span className="recurrence-legend-date">
+                {" · "}{t("ledger.monthlyCadence")}{nextCycleShortDate(record) ? ` ${nextCycleShortDate(record)}` : ""}
+              </span>
+            ) : null}
+          </legend>
+          {isRecurring && !recurrenceExpanded ? (
+            <div className="recurrence-summary">
+              <div className="recurrence-summary-schedule">
+                <strong>{t("ledger.monthlyCadence")}{nextCycleShortDate(record) ? ` ${nextCycleShortDate(record)}` : ""}</strong>
+                {record.recurrenceStatus === "paused" ? <span className="recurrence-paused-badge">{t("ledger.pausedBadge")}</span> : null}
+              </div>
+              <span className="recurrence-summary-text">
+                {behaviorLabel}
+                {recurrenceAmountMode === "variable" || !amount.trim() ? ` · ${amountModeLabel}` : ` · ${record.currency} ${amount}`}
+              </span>
+              <div className="recurrence-summary-actions">
+                {onUpdate ? (
+                  <button className="secondary-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>
+                    {record.recurrenceStatus === "active" ? t("ledger.pauseCycle") : t("ledger.resumeCycle")}
+                  </button>
+                ) : null}
+                {onUpdate ? (
+                  <ConfirmActionButton label={t("ledger.cancelCycle")} message={t("ledger.cancelCycleConfirm")} onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} />
+                ) : null}
+                <button className="quiet-action" type="button" onClick={() => setRecurrenceExpanded(true)}>
+                  {t("ledger.editCycleSettings")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <label htmlFor="record-editor-recurrence-choice" className="recurrence-behavior-label">
+                <span>{t("capture.recordBehavior")}</span>
+              </label>
+              <div className={`recurrence-behavior${recurrenceChoice === "current-cycle-only" ? " full-span" : ""}`}>
+                <select
+                  id="record-editor-recurrence-choice"
+                  value={recurrenceChoice}
+                  onChange={(event) => setRecurrenceChoice(event.target.value as RecurrenceChoice)}
+                >
+                  <option value="current-cycle-only">{t("capture.currentCycleOnly")}</option>
+                  <option value="prompt-next-cycle">{t("capture.promptNextCycle")}</option>
+                  <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>{t("capture.autoRecordNextCycle")}</option>
+                </select>
+              </div>
+              {recurrenceChoice === "current-cycle-only" ? (
+                <p className="field-help">{t("ledger.currentCycleOnlyHint")}</p>
+              ) : (
+                <>
+                  <label className="checkbox-field inline-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={recurrenceAmountMode === "variable"}
+                      onChange={(event) => {
+                        const variable = event.target.checked;
+                        setRecurrenceAmountMode(variable ? "variable" : "fixed");
+                        if (variable && recurrenceChoice === "auto-record-next-cycle") setRecurrenceChoice("prompt-next-cycle");
+                      }}
+                    />
+                    <span>{t("capture.amountMayVary")}</span>
+                  </label>
+                </>
+              )}
+              {recurrenceChoice === "auto-record-next-cycle" && !autoRecordAllowed ? (
+                <p className="field-help">{t("capture.autoRecordHint")}</p>
+              ) : null}
+              <button
+                className="collapse-recurrence"
+                type="button"
+                onClick={() => {
+                  // Collapsing a non-recurring preview discards any unsaved
+                  // behavior choice; a recurring record keeps its settings.
+                  if (!isRecurring) {
+                    setRecurrenceChoice(record.recurrenceChoice);
+                    setRecurrenceAmountMode(record.recurrenceAmountMode);
+                  }
+                  setRecurrenceExpanded(false);
+                }}
+              >
+                <span aria-hidden="true">▴</span>
+                {t("ledger.collapseRecurrence")}
+              </button>
+            </>
+          )}
+        </fieldset>
+      ) : null}
+      {supportsRecurrence && !isRecurring && !recurrenceExpanded ? (
+        <button
+          className="set-recurrence-toggle"
+          type="button"
+          onClick={() => {
+            setRecurrenceExpanded(true);
+            // Clicking 設為週期 expresses recurring intent: default to the safe
+            // "ask me next cycle" choice instead of leaving 僅本期 selected.
+            if (record.recurrenceChoice === "current-cycle-only") setRecurrenceChoice("prompt-next-cycle");
+          }}
+        >
+          {t("ledger.setRecurrence")}
+        </button>
+      ) : null}
+      {record.kind === "unresolved-expense" && onCompleteDetails ? (
+        <button className="set-recurrence-toggle" type="button" onClick={onCompleteDetails}>
+          {t("ledger.completeDetails")}
+        </button>
+      ) : null}
+      </div>
+      <div className="record-editor-footer full-span">
+        <div className="record-editor-actions">
+          <button className="primary-action" type="submit">{t("ledger.saveChanges")}</button>
+          <button className="quiet-action" type="button" onClick={onCancel}>{t("ledger.cancel")}</button>
+        </div>
       </div>
     </form>
   );
@@ -2305,24 +3078,25 @@ function HistorySuggestions({
   source: "merchant" | "item";
   onApply: (field: "counterparty" | "itemName" | "amount" | "account" | "category" | "currency", value: string) => void;
 }>) {
+  const { t } = useI18n();
   return (
-    <section className="history-suggestions" aria-label={source === "merchant" ? "Merchant history suggestions" : "Item history suggestions"}>
-      <span className="suggestion-label">Previous records</span>
+    <section className="history-suggestions" aria-label={source === "merchant" ? t("ledger.merchantSuggestionsAria") : t("ledger.itemSuggestionsAria")}>
+      <span className="suggestion-label">{t("ledger.historyLabel")}</span>
       {records.map((record) => (
         <div className="suggestion-row" key={record.id}>
           <strong>{source === "merchant" ? record.counterparty : record.itemName}</strong>
           <div className="suggestion-actions">
             {source === "item" ? (
-              <SuggestionButton label={`Use merchant ${record.counterparty}`} onClick={() => onApply("counterparty", record.counterparty)} />
+              <SuggestionButton label={t("ledger.useMerchant", { value: record.counterparty })} onClick={() => onApply("counterparty", record.counterparty)} />
             ) : null}
             {source === "merchant" ? (
-              <SuggestionButton label={`Use item ${record.itemName}`} onClick={() => onApply("itemName", record.itemName)} />
+              <SuggestionButton label={t("ledger.useItem", { value: record.itemName })} onClick={() => onApply("itemName", record.itemName)} />
             ) : null}
-            <SuggestionButton label={`Use amount ${record.currency} ${record.amount}`} onClick={() => onApply("amount", record.amount)} />
-            <SuggestionButton label={`Use account ${record.accountName}`} onClick={() => onApply("account", record.accountName)} />
-            <SuggestionButton label={`Use category ${record.category}`} onClick={() => onApply("category", record.category)} />
+            <SuggestionButton label={t("ledger.useAmount", { value: `${record.currency} ${record.amount}` })} onClick={() => onApply("amount", record.amount)} />
+            <SuggestionButton label={t("ledger.useAccount", { value: record.accountName })} onClick={() => onApply("account", record.accountName)} />
+            <SuggestionButton label={t("ledger.useCategory", { value: record.category })} onClick={() => onApply("category", record.category)} />
             <button className="suggestion-clear" type="button" onClick={() => onApply(source === "merchant" ? "counterparty" : "itemName", "")}>
-              Clear {source === "merchant" ? "merchant" : "item"}
+              {source === "merchant" ? t("ledger.clearMerchant") : t("ledger.clearItem")}
             </button>
           </div>
         </div>
@@ -2352,6 +3126,7 @@ function AmountField({
   required = false,
   allowNegative = false,
   placeholder = "100",
+  currency,
   onChange,
 }: Readonly<{
   id: string;
@@ -2360,36 +3135,28 @@ function AmountField({
   required?: boolean;
   allowNegative?: boolean;
   placeholder?: string;
+  currency?: string;
   onChange: (value: string) => void;
 }>) {
+  const { t } = useI18n();
   const steps = [-1000, -100, -10, 10, 100, 1000];
   const visibleSteps = allowNegative || value.trim() ? steps : steps.filter((step) => step > 0);
   const currentAmount = Number(value);
 
   return (
     <div className="form-field amount-field">
-      <label htmlFor={id}>
-        <span>{label}</span>
-      </label>
-      <div className="amount-control">
-        <input
-          id={id}
-          required={required}
-          inputMode="decimal"
-          min={allowNegative ? undefined : "0"}
-          step="1"
-          type="number"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-        />
-        <div className={`amount-steps ${visibleSteps.length === 3 ? "positive-only" : ""}`} aria-label={`${label} quick amount changes`}>
+      <div className="amount-head">
+        <label htmlFor={id}>
+          <span>{label}</span>
+        </label>
+        {currency ? <span className="amount-currency">{currency}</span> : null}
+        <div className={`amount-steps ${visibleSteps.length === 3 ? "positive-only" : ""}`} aria-label={t("ledger.quickAdjustAria", { label })}>
           {visibleSteps.map((step) => (
             <button
               key={step}
               className="amount-step"
               type="button"
-              aria-label={`${step > 0 ? "Increase" : "Decrease"} ${label} by ${Math.abs(step)}`}
+              aria-label={`${step > 0 ? t("ledger.increase") : t("ledger.decrease")}${label} ${Math.abs(step)}`}
               disabled={!allowNegative && step < 0 && (!Number.isFinite(currentAmount) || currentAmount <= 0)}
               onClick={() => onChange(adjustAmount(value, step, allowNegative))}
             >
@@ -2397,6 +3164,23 @@ function AmountField({
             </button>
           ))}
         </div>
+      </div>
+      <div className="amount-control">
+        <input
+          id={id}
+          required={required}
+          inputMode="decimal"
+          min={allowNegative ? undefined : "0"}
+          // "any" and not "1": the browser's step check would reject every
+          // decimal amount (a USD 98,765.43 expense), and because native
+          // validation runs before submit, the form would silently do nothing.
+          // Amount precision is the app's own rule (currencyPrecision).
+          step="any"
+          type="number"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
       </div>
     </div>
   );
@@ -2435,9 +3219,10 @@ function QuickAccountSetup({
   onConfirm: () => void;
   onCancel: () => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="quick-account-backdrop">
-    <dialog className="quick-account" aria-label="Add account" open>
+    <dialog className="quick-account" aria-label={t("capture.quickAccountAria")} open>
       <QuickAccountHeading />
       <QuickAccountFields
         accountName={accountName}
@@ -2461,13 +3246,14 @@ function QuickAccountSetup({
 }
 
 function QuickAccountHeading() {
+  const { t } = useI18n();
   return (
     <header className="quick-account-heading">
       <div>
-        <span className="eyebrow">New account</span>
-        <h3>Add an account</h3>
+        <span className="eyebrow">{t("capture.quickAccountEyebrow")}</span>
+        <h3>{t("capture.quickAccountTitle")}</h3>
       </div>
-      <p>Set the account details before using it in this record.</p>
+      <p>{t("capture.quickAccountCopy")}</p>
     </header>
   );
 }
@@ -2499,14 +3285,15 @@ function QuickAccountFields({
   onInitialBalanceChange: (value: string) => void;
   onInitialBalanceDateChange: (value: string) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <>
       <label>
-        <span>Account name</span>
-        <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" />
+        <span>{t("field.accountName")}</span>
+        <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder={t("capture.dailyWalletPlaceholder")} />
       </label>
       <label>
-        <span>Currency</span>
+        <span>{t("field.currency")}</span>
         <select value={currency} onChange={(event) => onCurrencyChange(event.target.value)}>
           <option value="TWD">TWD</option>
           <option value="JPY">JPY</option>
@@ -2514,22 +3301,22 @@ function QuickAccountFields({
         </select>
       </label>
       <label>
-        <span>Account type</span>
+        <span>{t("field.accountType")}</span>
         <select value={accountType} onChange={(event) => onAccountTypeChange?.(event.target.value)}>
-          <option value="cash">Cash</option>
-          <option value="bank">Bank account</option>
-          <option value="card">Credit card</option>
-          <option value="wallet">Stored-value wallet</option>
-          <option value="other">Other</option>
+          <option value="cash">{t("field.accountTypeCash")}</option>
+          <option value="bank">{t("field.accountTypeBank")}</option>
+          <option value="card">{t("field.accountTypeCard")}</option>
+          <option value="wallet">{t("field.accountTypeWallet")}</option>
+          <option value="other">{t("field.accountTypeOther")}</option>
         </select>
       </label>
       <label className="checkbox-row">
         <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange?.(event.target.checked)} />
-        <span>Allow negative balance</span>
+        <span>{t("capture.allowNegativeBalance")}</span>
       </label>
-      <AmountField id="quick-account-initial-balance" label="Initial balance (optional)" value={initialBalance} onChange={onInitialBalanceChange} placeholder="Leave blank to start from zero" />
+      <AmountField id="quick-account-initial-balance" label={t("capture.initialBalanceOptional")} value={initialBalance} onChange={onInitialBalanceChange} placeholder={t("capture.balanceEmptyStartsZero")} />
       {hasPositiveInitialBalance(initialBalance) ? <label>
-        <span>Balance as of</span>
+        <span>{t("field.balanceAsOf")}</span>
         <input type="date" required value={initialBalanceDate} onChange={(event) => onInitialBalanceDateChange(event.target.value)} />
       </label> : null}
     </>
@@ -2542,10 +3329,11 @@ function hasPositiveInitialBalance(value: string): boolean {
 }
 
 function QuickAccountActions({ onConfirm, onCancel }: Readonly<{ onConfirm: () => void; onCancel: () => void }>) {
+  const { t } = useI18n();
   return (
     <div className="quick-account-actions">
-      <button className="primary-action" type="button" onClick={onConfirm}>Add and select</button>
-      <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
+      <button className="primary-action" type="button" onClick={onConfirm}>{t("capture.addAndUse")}</button>
+      <button className="quiet-action" type="button" onClick={onCancel}>{t("capture.cancel")}</button>
     </div>
   );
 }
@@ -2590,19 +3378,19 @@ function useMealCapture(
     try {
       cameraVideoRef.current.srcObject = cameraStreamRef.current;
     } catch {
-      setCameraError("Camera preview could not start. You can still use Choose photos.");
+      setCameraError(t("meal.cameraPreviewFailed"));
       return;
     }
     const playResult = cameraVideoRef.current.play();
     if (playResult && typeof playResult.catch === "function") {
-      playResult.catch(() => setCameraError("Camera preview could not start. You can still use Choose photos."));
+      playResult.catch(() => setCameraError(t("meal.cameraPreviewFailed")));
     }
   }, [isCameraOpen]);
 
   const openCamera = async () => {
     setCameraError("");
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("This browser does not support direct camera capture. Use Choose photos instead.");
+      setCameraError(t("meal.cameraUnsupported"));
       return;
     }
     try {
@@ -2610,14 +3398,14 @@ function useMealCapture(
       setIsCameraOpen(true);
     } catch {
       cameraStreamRef.current = null;
-      setCameraError("Camera permission was denied or the camera is unavailable. Use Choose photos instead.");
+      setCameraError(t("meal.cameraDenied"));
     }
   };
 
   const captureCameraPhoto = () => {
     const video = cameraVideoRef.current;
     if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
-      setCameraError("The camera preview is not ready yet. Try again in a moment.");
+      setCameraError(t("meal.cameraNotReady"));
       return;
     }
     const canvas = document.createElement("canvas");
@@ -2626,7 +3414,7 @@ function useMealCapture(
     canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob((blob) => {
       if (!blob) {
-        setCameraError("The photo could not be created. Use Choose photos instead.");
+        setCameraError(t("meal.photoCreateFailed"));
         return;
       }
       appendMealPhotos([new File([blob], `meal-${Date.now()}.jpg`, { type: "image/jpeg" })]);
@@ -2638,20 +3426,20 @@ function useMealCapture(
     event.preventDefault();
     const mediaValidation = validateMediaBatch(mealPhotoFiles);
     if (!mediaValidation.ok) {
-      setMealError(mediaValidation.error ?? "The selected photos exceed the upload limit.");
+      setMealError(mediaValidation.error ?? t("meal.photosOverLimit"));
       return;
     }
     const mealId = `meal-${crypto.randomUUID()}`;
     const queuedMedia = queueUploadFiles(mealPhotoFiles, mealId, "meal-photo");
     const meal = createMealEntry({ occurredAt: mealOccurredAt, note: mealNote, mediaAssetIds: queuedMedia.map((item) => item.id) }, mealId);
     if (!meal) {
-      setMealError("Choose a meal time before saving.");
+      setMealError(t("meal.selectTimeError"));
       return;
     }
     onSaveMeal(meal);
     onQueueUploads(queuedMedia, mealPhotoFiles);
     setMealError("");
-    setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
+    setMealSavedMessage(t("meal.savedWithPhotos", { count: meal.mediaAssetIds.length }));
     setMealNote("");
     setMealPhotoFiles([]);
   };
@@ -2690,12 +3478,12 @@ function useScanCapture(
     setScanError("");
     setScanSavedMessage("");
     if (scanFiles.length === 0 || (captureIntent !== "scan-invoice" && captureIntent !== "scan-receipt")) {
-      setScanError("Choose at least one scan image before saving.");
+      setScanError(t("scan.needImageError"));
       return;
     }
     const mediaValidation = validateMediaBatch(scanFiles);
     if (!mediaValidation.ok) {
-      setScanError(mediaValidation.error ?? "The selected scans exceed the upload limit.");
+      setScanError(mediaValidation.error ?? t("scan.overLimit"));
       return;
     }
     const queuedMedia = queueUploadFiles(scanFiles, `scan-${crypto.randomUUID()}`, captureIntent === "scan-invoice" ? "invoice-scan" : "receipt-scan");
@@ -2706,7 +3494,7 @@ function useScanCapture(
     onQueueUploads(queuedMedia, scanFiles);
     event.currentTarget.reset();
     setScanFiles([]);
-    setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
+    setScanSavedMessage(t("scan.savedMessage", { count: nextScans.length }));
   };
 
   return { scanFiles, setScanFiles, scanError, setScanError, scanSavedMessage, handleScanSubmit };
@@ -2723,16 +3511,16 @@ function CaptureStartPanel({
   actionIcons: Record<CaptureIntent, LucideIcon>;
   onSelectIntent: (intent: CaptureIntent) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <section className="capture-start" aria-labelledby="capture-start-title">
       <div className="capture-start-heading">
         <div>
-          <p className="eyebrow">Quick capture</p>
-          <h2 id="capture-start-title">What are you saving?</h2>
+          <p className="eyebrow">{t("capture.quickEyebrow")}</p>
+          <h2 id="capture-start-title">{t("capture.whatToRecord")}</h2>
         </div>
-        <p className="capture-start-detail">{selectedCaptureAction.detail}</p>
       </div>
-      <div className="capture-intent-picker" role="toolbar" aria-label="Capture type">
+      <div className="capture-intent-picker" role="toolbar" aria-label={t("capture.intentPickerAria")}>
         {captureIntents.map((action) => {
           const Icon = actionIcons[action.id];
           const selected = captureIntent === action.id;
@@ -2745,7 +3533,7 @@ function CaptureStartPanel({
               onClick={() => onSelectIntent(action.id)}
             >
               <Icon size={18} aria-hidden="true" />
-              <span>{action.label}</span>
+              <span>{t(action.labelKey)}</span>
             </button>
           );
         })}
@@ -2872,26 +3660,27 @@ function ManualLedgerPartyFields({
   setIsAddingCategory, setQuickCategoryName, setQuickCategoryError, addQuickCategory, setIsAddingSource,
   setQuickSourceName, setQuickSourceError, addQuickSource,
 }: Readonly<ManualLedgerPartyFieldsProps>) {
+  const { t } = useI18n();
   return (
     <>
       {needsCategory ? (
         <div className="form-field">
-          <label htmlFor="entry-category"><span>Category</span></label>
+          <label htmlFor="entry-category"><span>{t("field.category")}</span></label>
           <div className="field-control-row">
             <select id="entry-category" required value={form.category} onChange={(event) => updateForm("category", event.target.value)}>
-              <option value="">Select a category</option>
+              <option value="">{t("capture.selectCategory")}</option>
               {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
             </select>
-            <button className="icon-button" type="button" aria-label="Add category" title="Add category" onClick={() => { setIsAddingCategory(true); setQuickCategoryError(""); }}>
+            <button className="icon-button" type="button" aria-label={t("capture.addCategory")} title={t("capture.addCategory")} onClick={() => { setIsAddingCategory(true); setQuickCategoryError(""); }}>
               <Plus size={18} aria-hidden="true" />
             </button>
           </div>
           {isAddingCategory ? (
-            <section className="quick-category" aria-label="Quick category setup">
-              <label><span>New category name</span><input value={quickCategoryName} onChange={(event) => { setQuickCategoryName(event.target.value); setQuickCategoryError(""); }} placeholder="Household" /></label>
+            <section className="quick-category" aria-label={t("capture.quickCategoryAria")}>
+              <label><span>{t("field.newCategoryName")}</span><input value={quickCategoryName} onChange={(event) => { setQuickCategoryName(event.target.value); setQuickCategoryError(""); }} placeholder={t("capture.homePlaceholder")} /></label>
               <div className="quick-account-actions">
-                <button className="primary-action" type="button" onClick={addQuickCategory}>Add and select</button>
-                <button className="quiet-action" type="button" onClick={() => { setIsAddingCategory(false); setQuickCategoryError(""); }}>Cancel</button>
+                <button className="primary-action" type="button" onClick={addQuickCategory}>{t("capture.addAndUse")}</button>
+                <button className="quiet-action" type="button" onClick={() => { setIsAddingCategory(false); setQuickCategoryError(""); }}>{t("capture.cancel")}</button>
               </div>
               {quickCategoryError ? <p className="quick-account-error" role="alert">{quickCategoryError}</p> : null}
             </section>
@@ -2918,17 +3707,17 @@ function ManualLedgerPartyFields({
       ) : null}
       {form.kind === "refund" ? (
         <>
-          <label><span>Refund type</span><select value={form.refundSubtype} onChange={(event) => updateForm("refundSubtype", event.target.value as DraftForm["refundSubtype"])}><option value="refund">Store refund</option><option value="payback">Friend payback</option></select></label>
+          <label><span>{t("field.refundType")}</span><select value={form.refundSubtype} onChange={(event) => updateForm("refundSubtype", event.target.value as DraftForm["refundSubtype"])}><option value="refund">{t("capture.storeRefund")}</option><option value="payback">{t("capture.friendPayback")}</option></select></label>
           {form.refundSubtype === "payback" ? (
-            <label htmlFor="entry-refund-links"><span>Original expense</span><select id="entry-refund-links" aria-label="Original expense" required multiple value={selectedRefundIds} onChange={(event) => { const ids = [...event.target.selectedOptions].map((option) => option.value).filter(Boolean); setForm((current) => ({ ...current, refundLinkedRecordId: ids[0] ?? "", refundLinkedRecordIds: ids })); }}><option value="">Select an expense to link</option>{refundableRecords.map((record) => <option key={record.id} value={record.id}>{record.localDate} · {record.counterparty} · {record.currency} {record.amount}</option>)}</select><small>Select one or more expenses when a payback settles multiple shared expenses.</small></label>
+            <label htmlFor="entry-refund-links"><span>{t("field.originalExpense")}</span><select id="entry-refund-links" aria-label={t("field.originalExpense")} required multiple value={selectedRefundIds} onChange={(event) => { const ids = [...event.target.selectedOptions].map((option) => option.value).filter(Boolean); setForm((current) => ({ ...current, refundLinkedRecordId: ids[0] ?? "", refundLinkedRecordIds: ids })); }}><option value="">{t("capture.selectLinkedExpense")}</option>{refundableRecords.map((record) => <option key={record.id} value={record.id}>{record.localDate} · {record.counterparty} · {record.currency} {record.amount}</option>)}</select><small>{t("capture.linkedExpenseHint")}</small></label>
           ) : null}
         </>
       ) : null}
       {form.kind === "expense" ? (
-        <div className="form-field">
-          <label htmlFor="entry-item-name"><span>Item name</span></label>
+        <div className="form-field entry-item-name-field">
+          <label htmlFor="entry-item-name"><span>{t("field.itemName")}</span></label>
           <input id="entry-item-name" required pattern=".*\S.*" disabled={form.itemNameMissing} value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
-          <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.itemNameMissing} onChange={(event) => setMissingExpenseField("itemName", event.target.checked)} /><span>Item unavailable</span></label>
+          <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.itemNameMissing} onChange={(event) => setMissingExpenseField("itemName", event.target.checked)} /><span>{t("field.itemNameMissing")}</span></label>
           {itemSuggestions.length > 0 && !form.itemNameMissing ? <HistorySuggestions records={itemSuggestions} source="item" onApply={applySuggestion} /> : null}
         </div>
       ) : null}
@@ -2947,27 +3736,28 @@ function ManualLedgerCounterpartyField({
   updateForm, setMissingExpenseField, applySuggestion, setIsAddingSource, setQuickSourceName, setQuickSourceError,
   addQuickSource,
 }: Readonly<ManualLedgerCounterpartyFieldProps>) {
+  const { t } = useI18n();
   const isIncomeSource = form.kind === "income" || form.kind === "fund-addition";
   if (isIncomeSource) {
     return (
       <div className="form-field">
-        <label htmlFor="entry-source">Source</label>
+        <label htmlFor="entry-source">{t("field.source")}</label>
         <div className="field-control-row">
           <select id="entry-source" required value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)}>
-            <option value="">Select a source</option>
+            <option value="">{t("capture.selectSource")}</option>
             {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
           </select>
-          <button className="icon-button" type="button" aria-label="Add source" title="Add source" onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
+          <button className="icon-button" type="button" aria-label={t("capture.addSource")} title={t("capture.addSource")} onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
             <Plus size={18} aria-hidden="true" />
           </button>
         </div>
         {isAddingSource ? (
-          <section className="quick-category" aria-label="Quick source setup">
-            <label htmlFor="quick-source-name">New source</label>
-            <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder="Parent" />
+          <section className="quick-category" aria-label={t("capture.quickSourceAria")}>
+            <label htmlFor="quick-source-name">{t("field.newSource")}</label>
+            <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder={t("capture.parentsPlaceholder")} />
             <div className="quick-account-actions">
-              <button className="primary-action" type="button" onClick={addQuickSource}>Add and select</button>
-              <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>Cancel</button>
+              <button className="primary-action" type="button" onClick={addQuickSource}>{t("capture.addAndUse")}</button>
+              <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>{t("capture.cancel")}</button>
             </div>
             {quickSourceError ? <p className="quick-account-error" role="alert">{quickSourceError}</p> : null}
           </section>
@@ -2979,8 +3769,8 @@ function ManualLedgerCounterpartyField({
   return (
     <div className="form-field">
       <label htmlFor="entry-counterparty"><span>{counterpartyLabel}</span></label>
-      <input id="entry-counterparty" required pattern=".*\S.*" title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`} value={form.counterparty} disabled={form.kind === "expense" && form.counterpartyMissing} onChange={(event) => updateForm("counterparty", event.target.value)} />
-      {form.kind === "expense" ? <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} /><span>Merchant unavailable</span></label> : null}
+      <input id="entry-counterparty" required pattern=".*\S.*" title={t("capture.enterMerchantTitle", { label: counterpartyLabel })} value={form.counterparty} disabled={form.kind === "expense" && form.counterpartyMissing} onChange={(event) => updateForm("counterparty", event.target.value)} />
+      {form.kind === "expense" ? <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} /><span>{t("field.merchantMissing")}</span></label> : null}
       {form.kind === "expense" && merchantSuggestions.length > 0 && !form.counterpartyMissing ? <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} /> : null}
     </div>
   );
@@ -2997,35 +3787,36 @@ function ManualLedgerMoneyFields({
   refundDifferenceNeedsClassification, refundDifferenceLabel, setForm, updateForm, beginQuickAccountSetup,
   selectDestinationAccount, selectFeeAccount, setTransferMode,
 }: Readonly<ManualLedgerMoneyFieldsProps>) {
+  const { t } = useI18n();
   return (
     <>
       {isTransfer ? <TransferFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectDestinationAccount={selectDestinationAccount} onSetTransferMode={setTransferMode} /> : null}
-      <AmountField id="entry-amount" label={isTransfer && form.transferMode === "cross-currency" ? "Source amount" : "Amount"} required value={form.amount} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
-      <div className="form-field"><span>{isTransfer && form.transferMode === "cross-currency" ? "Source currency" : "Currency"}</span><output className="derived-value">{form.currency}</output></div>
-      {isTransfer && form.transferMode === "cross-currency" ? <><AmountField id="entry-destination-amount" label="Destination amount" required value={form.destinationAmount} onChange={(value) => updateForm("destinationAmount", value)} /><div className="form-field"><span>Destination currency</span><output className="derived-value">{form.destinationCurrency}</output></div></> : null}
-      {isTransfer ? <label className="full-span checkbox-field"><input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} /><span>Add transfer fee</span></label> : null}
+      <AmountField id="entry-amount" label={isTransfer && form.transferMode === "cross-currency" ? t("field.sourceAmount") : t("field.amount")} required value={form.amount} currency={form.currency} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
+      {isTransfer && form.transferMode === "cross-currency" ? <><AmountField id="entry-destination-amount" label={t("field.destinationAmount")} required value={form.destinationAmount} currency={form.destinationCurrency} onChange={(value) => updateForm("destinationAmount", value)} /></> : null}
+      {isTransfer ? <label className="full-span checkbox-field"><input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} /><span>{t("capture.addTransferFee")}</span></label> : null}
       {isTransfer && form.feeEnabled ? <FeeFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectFeeAccount={selectFeeAccount} onUpdateForm={updateForm} /> : null}
       {form.kind === "refund" ? <RefundFields form={form} selectedRefundHasDifferentCurrency={selectedRefundHasDifferentCurrency} refundDifferenceNeedsClassification={refundDifferenceNeedsClassification} refundDifferenceLabel={refundDifferenceLabel} updateForm={updateForm} /> : null}
-      {form.kind === "adjustment" ? <label className="full-span"><span>Adjustment reason</span><textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} /></label> : null}
+      {form.kind === "adjustment" ? <label className="full-span"><span>{t("field.adjustmentReason")}</span><textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} /></label> : null}
     </>
   );
 }
 
 function RefundFields({ form, selectedRefundHasDifferentCurrency, refundDifferenceNeedsClassification, refundDifferenceLabel, updateForm }: Readonly<Pick<ManualLedgerMoneyFieldsProps, "form" | "selectedRefundHasDifferentCurrency" | "refundDifferenceNeedsClassification" | "refundDifferenceLabel" | "updateForm">>) {
+  const { t } = useI18n();
   const differenceDescription = selectedRefundHasDifferentCurrency
-    ? "The linked expense uses another currency; classify the difference before saving this payback."
-    : "This payback exceeds the linked expense and needs an explicit classification.";
+    ? t("capture.differenceCurrency")
+    : t("capture.differenceExcess");
   return (
     <>
-      <label className="full-span"><span>Refund reason</span><textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} /></label>
+      <label className="full-span"><span>{t("field.refundReason")}</span><textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} /></label>
       {refundDifferenceNeedsClassification ? (
         <label className="full-span warning-field">
           <span>{refundDifferenceLabel}</span>
           <select aria-label={refundDifferenceLabel} value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}>
-            <option value="unclassified">Choose a classification</option>
-            <option value="income">Classify excess as income</option>
-            <option value="negative-expense">Classify excess as additional negative expense</option>
-            <option value="exchange_difference">Classify as exchange difference</option>
+            <option value="unclassified">{t("capture.selectClassification")}</option>
+            <option value="income">{t("capture.excessIncome")}</option>
+            <option value="negative-expense">{t("capture.excessNegativeExpense")}</option>
+            <option value="exchange_difference">{t("capture.excessExchangeDifference")}</option>
           </select>
           <small>{differenceDescription}</small>
         </label>
@@ -3043,7 +3834,7 @@ function ManualLedgerDetails(props: Readonly<ManualLedgerDetailsProps>) {
   );
 }
 
-type ManualLedgerTimingFieldsProps = Pick<ManualLedgerFormProps, "form" | "isUnresolvedExpense" | "setTimePrecision" | "setMonthRange" | "updateForm"> & {
+type ManualLedgerTimingFieldsProps = Pick<ManualLedgerFormProps, "form" | "isUnresolvedExpense" | "setTimePrecision" | "setMonthRange" | "updateForm" | "setRecordKind"> & {
   hasSelectedAccount: boolean;
 };
 
@@ -3052,32 +3843,51 @@ type ManualLedgerAccountFieldProps = Pick<ManualLedgerFormProps, "form" | "accou
 function ManualLedgerAccountField({
   form, accounts, isTransfer, quickAccountField, quickAccountProps, beginQuickAccountSetup, selectSourceAccount,
 }: Readonly<ManualLedgerAccountFieldProps>) {
+  const { t } = useI18n();
   return (
     <div className={`form-field entry-account-field ${isTransfer ? "" : "entry-account-last"}`}>
-      <label htmlFor="entry-account"><span>{isTransfer ? "Source account" : "Account"}</span></label>
+      <label htmlFor="entry-account"><span>{isTransfer ? t("capture.sourceAccount") : t("field.account")}</span></label>
       <div className="field-control-row">
         <select id="entry-account" required disabled={accounts.length === 0} value={form.account} onChange={(event) => selectSourceAccount(event.target.value)}>
-          <option value="">{accounts.length === 0 ? "Add an account" : "Select an account"}</option>
+          <option value="">{accounts.length === 0 ? t("capture.addAccount") : t("capture.selectAccount")}</option>
           {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
         </select>
-        <button className="icon-button" type="button" aria-label="Add account" title="Add account" onClick={() => beginQuickAccountSetup("account")}><Plus size={18} aria-hidden="true" /></button>
+        <button className="icon-button" type="button" aria-label={t("capture.addAccount")} title={t("capture.addAccount")} onClick={() => beginQuickAccountSetup("account")}><Plus size={18} aria-hidden="true" /></button>
       </div>
-      {accounts.length === 0 ? <p className="field-help">Add an account to start recording.</p> : null}
+      {accounts.length === 0 ? <p className="field-help">{t("capture.needAccountFirst")}</p> : null}
       {quickAccountField === "account" ? <QuickAccountSetup {...quickAccountProps} /> : null}
     </div>
   );
 }
 
 function ManualLedgerTimingFields({
-  form, hasSelectedAccount, isUnresolvedExpense, setTimePrecision, setMonthRange, updateForm,
+  form, hasSelectedAccount, isUnresolvedExpense, setTimePrecision, setMonthRange, updateForm, setRecordKind,
 }: Readonly<ManualLedgerTimingFieldsProps>) {
+  const { t } = useI18n();
   return (
     <>
-      {hasSelectedAccount && !isUnresolvedExpense ? <label className="entry-date-field"><span>Date</span><input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} /></label> : null}
+      {hasSelectedAccount && !isUnresolvedExpense ? (
+        <div className="form-field entry-date-field">
+          <label htmlFor="entry-date"><span>{t("field.date")}</span></label>
+          <input id="entry-date" required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+        </div>
+      ) : null}
+      {hasSelectedAccount && !isUnresolvedExpense ? (
+        <div className="form-field entry-kind-field">
+          <label htmlFor="entry-kind"><span>{t("field.kind")}</span></label>
+          <select id="entry-kind" value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
+            {draftKinds.map((kind) => (
+              <option key={kind} value={kind}>
+                {kindLabel(kind)}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       {hasSelectedAccount && isUnresolvedExpense ? (
-        <section className="full-span time-precision-fields" aria-label="Unresolved expense timing">
+        <section className="full-span time-precision-fields" aria-label={t("capture.unresolvedTimeAria")}>
           <fieldset className="segmented-fieldset">
-            <legend>Time precision</legend>
+            <legend>{t("field.timePrecision")}</legend>
             <div className="segmented-control">
               {(["day", "month", "period"] as const).map((precision) => (
                 <label className={form.timePrecision === precision ? "active" : ""} key={precision}>
@@ -3087,9 +3897,9 @@ function ManualLedgerTimingFields({
               ))}
             </div>
           </fieldset>
-          {form.timePrecision === "day" ? <label><span>Date</span><input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} /></label> : null}
-          {form.timePrecision === "month" ? <label><span>Month to record</span><input required type="month" value={form.periodStart.slice(0, 7)} onChange={(event) => setMonthRange(event.target.value)} /></label> : null}
-          {form.timePrecision === "period" ? <div className="period-range"><label><span>Period start</span><input required type="date" value={form.periodStart} onChange={(event) => updateForm("periodStart", event.target.value)} /></label><label><span>Period end</span><input required type="date" value={form.periodEnd} onChange={(event) => updateForm("periodEnd", event.target.value)} /></label></div> : null}
+          {form.timePrecision === "day" ? <label><span>{t("field.date")}</span><input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} /></label> : null}
+          {form.timePrecision === "month" ? <label><span>{t("field.recordMonth")}</span><input required type="month" value={form.periodStart.slice(0, 7)} onChange={(event) => setMonthRange(event.target.value)} /></label> : null}
+          {form.timePrecision === "period" ? <div className="period-range"><label><span>{t("field.periodStart")}</span><input required type="date" value={form.periodStart} onChange={(event) => updateForm("periodStart", event.target.value)} /></label><label><span>{t("field.periodEnd")}</span><input required type="date" value={form.periodEnd} onChange={(event) => updateForm("periodEnd", event.target.value)} /></label></div> : null}
         </section>
       ) : null}
     </>
@@ -3111,22 +3921,11 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
     addQuickCategory, setIsAddingSource, setQuickSourceName, setQuickSourceError, addQuickSource, resetEntry,
     keepEntryAsDraft, setShowCancelChoices,
   } = props;
+  const { t } = useI18n();
   return (
     <form className={`draft-form ${hasSelectedAccount ? "has-selected-account" : "needs-account"}`} id="manual-draft-form" onSubmit={handleSubmit}>
-              <ManualLedgerTimingFields form={form} hasSelectedAccount={hasSelectedAccount} isUnresolvedExpense={isUnresolvedExpense} setTimePrecision={setTimePrecision} setMonthRange={setMonthRange} updateForm={updateForm} />
+              <ManualLedgerTimingFields form={form} hasSelectedAccount={hasSelectedAccount} isUnresolvedExpense={isUnresolvedExpense} setTimePrecision={setTimePrecision} setMonthRange={setMonthRange} updateForm={updateForm} setRecordKind={setRecordKind} />
               <ManualLedgerAccountField form={form} accounts={accounts} isTransfer={isTransfer} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} beginQuickAccountSetup={beginQuickAccountSetup} selectSourceAccount={selectSourceAccount} />
-              {hasSelectedAccount ? (
-                <label className="entry-kind-field">
-                  <span>Type</span>
-                  <select value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
-                    {draftKinds.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kindLabel(kind)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
               {hasSelectedAccount ? (
                 <ManualLedgerDetails
                   form={form}
@@ -3171,46 +3970,61 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
                 />
               ) : (
                 <div className="entry-details-locked full-span" aria-live="polite">
-                  <strong>Select an account to continue</strong>
-                  <span>Choose an existing account or use the plus button above. The record fields will appear next.</span>
+                  <strong>{t("capture.selectAccountFirst")}</strong>
+                  <span>{t("capture.selectAccountFirstDetail")}</span>
                 </div>
               )}
               {supportsRecurrence && hasSelectedAccount ? (
-                <fieldset className="recurrence-control full-span" aria-label="Recurrence">
-                  <legend>Next cycle</legend>
-                  <label htmlFor="entry-recurrence-choice">
-                    <span>Record behavior</span>
+                <fieldset className="recurrence-control full-span" aria-label={t("capture.nextCycleLegend")}>
+                  <legend>
+                    {t("capture.nextCycleLegend")}
+                    {form.recurrenceChoice !== "current-cycle-only" && (form.date || form.periodStart) ? (
+                      <span className="recurrence-legend-date">
+                        {" · "}{t("ledger.monthlyCadence")}{form.date || form.periodStart ? ` ${shortDateOf(addMonthsClamped(form.date || form.periodStart, 1))}` : ""}
+                      </span>
+                    ) : null}
+                  </legend>
+                  <label htmlFor="entry-recurrence-choice" className="recurrence-behavior-label">
+                    <span>{t("capture.recordBehavior")}</span>
                   </label>
-                  <select
-                    id="entry-recurrence-choice"
-                    disabled={!hasSelectedAccount}
-                    value={form.recurrenceChoice}
-                    onChange={(event) => updateForm("recurrenceChoice", event.target.value as DraftForm["recurrenceChoice"])}
-                  >
-                    <option value="current-cycle-only">Current cycle only</option>
-                    <option value="prompt-next-cycle">Ask me next cycle</option>
-                    <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>Auto-record next cycle</option>
-                  </select>
-                  <label className="checkbox-field inline-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={form.recurrenceAmountMode === "variable"}
+                  <div className={`recurrence-behavior${form.recurrenceChoice === "current-cycle-only" ? " full-span" : ""}`}>
+                    <select
+                      id="entry-recurrence-choice"
                       disabled={!hasSelectedAccount}
-                      onChange={(event) => {
-                        const variable = event.target.checked;
-                        setFormError(null);
-                        setSavedMessage("");
-                        setForm((current) => ({
-                          ...current,
-                          recurrenceAmountMode: variable ? "variable" : "fixed",
-                          recurrenceChoice: variable && current.recurrenceChoice === "auto-record-next-cycle" ? "prompt-next-cycle" : current.recurrenceChoice,
-                        }));
-                      }}
-                    />
-                    <span>Amount may vary next cycle</span>
-                  </label>
+                      value={form.recurrenceChoice}
+                      onChange={(event) => updateForm("recurrenceChoice", event.target.value as DraftForm["recurrenceChoice"])}
+                    >
+                      <option value="current-cycle-only">{t("capture.currentCycleOnly")}</option>
+                      <option value="prompt-next-cycle">{t("capture.promptNextCycle")}</option>
+                      <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>{t("capture.autoRecordNextCycle")}</option>
+                    </select>
+                  </div>
+                  {form.recurrenceChoice === "current-cycle-only" ? (
+                    <p className="field-help">{t("ledger.currentCycleOnlyHint")}</p>
+                  ) : (
+                    <>
+                      <label className="checkbox-field inline-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={form.recurrenceAmountMode === "variable"}
+                          disabled={!hasSelectedAccount}
+                          onChange={(event) => {
+                            const variable = event.target.checked;
+                            setFormError(null);
+                            setSavedMessage("");
+                            setForm((current) => ({
+                              ...current,
+                              recurrenceAmountMode: variable ? "variable" : "fixed",
+                              recurrenceChoice: variable && current.recurrenceChoice === "auto-record-next-cycle" ? "prompt-next-cycle" : current.recurrenceChoice,
+                            }));
+                          }}
+                        />
+                        <span>{t("capture.amountMayVary")}</span>
+                      </label>
+                    </>
+                  )}
                   {form.recurrenceChoice === "auto-record-next-cycle" && !autoRecordAllowed ? (
-                    <p className="field-help">Auto-record needs a complete fixed-amount record.</p>
+                    <p className="field-help">{t("capture.autoRecordHint")}</p>
                   ) : null}
                 </fieldset>
               ) : null}
@@ -3219,18 +4033,18 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
               {hasSelectedAccount ? (
                 <>
                   {showCancelChoices ? (
-                    <dialog className="cancel-choice full-span" aria-label="Cancel entry" open>
-                      <strong>What should happen to this entry?</strong>
+                    <dialog className="cancel-choice full-span" aria-label={t("capture.cancelEntryAria")} open>
+                      <strong>{t("capture.cancelEntryQuestion")}</strong>
                       <div className="quick-account-actions">
-                        <button className="danger-action" type="button" onClick={resetEntry}>Discard changes</button>
-                        <button className="secondary-action" type="button" onClick={keepEntryAsDraft}>Keep as draft</button>
-                        <button className="quiet-action" type="button" onClick={() => setShowCancelChoices(false)}>Continue editing</button>
+                        <button className="danger-action" type="button" onClick={resetEntry}>{t("capture.discardChanges")}</button>
+                        <button className="secondary-action" type="button" onClick={keepEntryAsDraft}>{t("capture.keepAsDraft")}</button>
+                        <button className="quiet-action" type="button" onClick={() => setShowCancelChoices(false)}>{t("capture.continueEditing")}</button>
                       </div>
                     </dialog>
                   ) : null}
                   <div className="quick-account-actions full-span">
-                    <button className="quiet-action" type="button" onClick={() => hasUnsavedChanges ? setShowCancelChoices(true) : resetEntry()}>Cancel entry</button>
-                    <button className="primary-action" type="submit">Save record</button>
+                    <button className="quiet-action" type="button" onClick={() => hasUnsavedChanges ? setShowCancelChoices(true) : resetEntry()}>{t("capture.cancelEntry")}</button>
+                    <button className="primary-action" type="submit">{t("capture.saveRecord")}</button>
                   </div>
                 </>
               ) : null}
@@ -3240,14 +4054,15 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
 
 function ManualLedgerPanel(props: Readonly<ManualLedgerFormProps>) {
   const { accounts, beginQuickAccountSetup, quickAccountField, quickAccountProps } = props;
+  const { t } = useI18n();
   return (
-    <Panel key="manual-ledger" title="Manual ledger record" eyebrow="Official local record">
+    <Panel key="manual-ledger" title={t("capture.manualPanelTitle")} eyebrow={t("capture.manualPanelEyebrow")}>
       {accounts.length === 0 ? (
-        <section className="manual-empty-state" aria-label="Account required" aria-live="polite">
-          <span className="eyebrow">Account required</span>
-          <h3>Create your first account</h3>
-          <p>Your ledger needs a wallet, bank account, card, or other balance source before a record can be saved.</p>
-          <button className="primary-action align-start" type="button" onClick={() => beginQuickAccountSetup("account")}>Create first account</button>
+        <section className="manual-empty-state" aria-label={t("capture.needAccountAria")} aria-live="polite">
+          <span className="eyebrow">{t("capture.needAccountEyebrow")}</span>
+          <h3>{t("capture.createFirstAccount")}</h3>
+          <p>{t("capture.needAccountCopy")}</p>
+          <button className="primary-action align-start" type="button" onClick={() => beginQuickAccountSetup("account")}>{t("capture.createFirstAccountAction")}</button>
         </section>
       ) : (
         <ManualLedgerForm {...props} />
@@ -3303,6 +4118,8 @@ function VoiceCapturePage({
   entityPolicy,
   mode,
   onModeChange,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveRecord,
   onSaveDraft,
@@ -3311,23 +4128,16 @@ function VoiceCapturePage({
   entityPolicy: AiEntityPolicy;
   mode: "a" | "b";
   onModeChange: (mode: "a" | "b") => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
 }>) {
-  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const categories = useMemo(
     () => [...new Set([...expenseCategories, ...incomeCategories, ...customCategories])],
     [customCategories],
   );
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
-    } catch {
-      // Category persistence is best effort while the account and record stores remain local-first.
-    }
-  }, [customCategories]);
 
   const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
     resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
@@ -3356,6 +4166,8 @@ function CapturePage({
   draftToEdit,
   onDiscardDraft,
   onFinishDraftEdit,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveInitialFunding,
   onSaveRecord,
@@ -3376,9 +4188,11 @@ function CapturePage({
   draftToEdit: TransactionDraft | null;
   onDiscardDraft: (id: string) => void;
   onFinishDraftEdit: () => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
   onSaveMeal: (meal: MealEntry) => void;
   scans: TemporaryScan[];
@@ -3402,7 +4216,6 @@ function CapturePage({
   const [quickAccountBalance, setQuickAccountBalance] = useState("");
   const [quickAccountBalanceDate, setQuickAccountBalanceDate] = useState(localDate());
   const [quickAccountError, setQuickAccountError] = useState("");
-  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [quickCategoryName, setQuickCategoryName] = useState("");
   const [quickCategoryError, setQuickCategoryError] = useState("");
@@ -3448,27 +4261,19 @@ function CapturePage({
     setAttachmentError("");
     setAttachmentSavedMessage("");
     if (attachmentFiles.length === 0) {
-      setAttachmentError("Choose at least one photo before saving.");
+      setAttachmentError(t("attach.needPhoto"));
       return;
     }
     const mediaValidation = validateMediaBatch(attachmentFiles);
     if (!mediaValidation.ok) {
-      setAttachmentError(mediaValidation.error ?? "The selected photos exceed the upload limit.");
+      setAttachmentError(mediaValidation.error ?? t("attach.overLimit"));
       return;
     }
     const queuedMedia = queueUploadFiles(attachmentFiles, `attachment-${crypto.randomUUID()}`, "attachment");
     onQueueUploads(queuedMedia, attachmentFiles);
     setAttachmentFiles([]);
-    setAttachmentSavedMessage(`${queuedMedia.length} photo${queuedMedia.length === 1 ? "" : "s"} saved locally as attachment evidence.`);
+    setAttachmentSavedMessage(t("attach.saved", { count: queuedMedia.length }));
   };
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
-    } catch {
-      // Category persistence is best effort while the account and record stores remain local-first.
-    }
-  }, [customCategories]);
 
   useEffect(() => {
     try {
@@ -3533,7 +4338,7 @@ function CapturePage({
       && selectedRefundRecords.length > 0
       && (selectedRefundHasDifferentCurrency || Number(form.amount) > linkedRefundAmount),
   );
-  const refundDifferenceLabel = selectedRefundHasDifferentCurrency ? "Currency difference handling" : "Excess amount handling";
+  const refundDifferenceLabel = selectedRefundHasDifferentCurrency ? t("capture.exchangeDifference") : t("capture.excessHandling");
   const supportsRecurrence = form.kind === "expense" || form.kind === "income" || form.kind === "transfer";
   const autoRecordAllowed = canAutoRecordNextCycle(form, accounts);
 
@@ -3601,12 +4406,12 @@ function CapturePage({
     const category = quickCategoryName.trim();
 
     if (!category) {
-      setQuickCategoryError("Enter a category name before adding it.");
+      setQuickCategoryError(t("settings.categoryNameRequired"));
       return;
     }
 
     if (categoryOptions.some((item) => item.toLocaleLowerCase() === category.toLocaleLowerCase())) {
-      setQuickCategoryError("This category already exists.");
+      setQuickCategoryError(t("settings.categoryExists"));
       return;
     }
 
@@ -3621,12 +4426,12 @@ function CapturePage({
     const source = quickSourceName.trim();
 
     if (!source) {
-      setQuickSourceError("Enter a source before adding it.");
+      setQuickSourceError(t("settings.sourceNameRequired"));
       return;
     }
 
     if (sourceOptions.some((item) => item.toLocaleLowerCase() === source.toLocaleLowerCase())) {
-      setQuickSourceError("This source already exists.");
+      setQuickSourceError(t("settings.sourceExists"));
       return;
     }
 
@@ -3661,17 +4466,18 @@ function CapturePage({
     const nextDraft = createTransactionDraft(form, draftId(), accounts);
 
     if (!nextDraft) {
-      setFormError("Please fill in all required fields before saving this record.");
+      setFormError(t("ledger.fillRequired"));
       return;
     }
 
     if (refundDifferenceNeedsClassification && form.refundExcessHandling === "unclassified") {
-      setFormError("Classify the amount above the linked expense before saving this payback.");
+      setFormError(t("ledger.classifyRefundFirst"));
       return;
     }
 
-    if (!onSaveRecord(nextDraft)) {
-      setFormError("This record could not be saved. Check the selected accounts and amounts.");
+    const saveReason = onSaveRecord(nextDraft);
+    if (saveReason !== null) {
+      setFormError(saveReason);
       return;
     }
 
@@ -3699,7 +4505,7 @@ function CapturePage({
       periodStart: "",
       periodEnd: "",
     };
-    setSavedMessage("Record saved to the local ledger.");
+    setSavedMessage(t("ledger.savedMessage"));
     setForm(nextCleanForm);
     setCleanForm(nextCleanForm);
     if (draftToEdit) {
@@ -3714,7 +4520,7 @@ function CapturePage({
     setForm(nextForm);
     setCleanForm(nextForm);
     setFormError(null);
-    setSavedMessage("Entry cancelled.");
+    setSavedMessage(t("ledger.cancelledMessage"));
     setShowCancelChoices(false);
   };
 
@@ -3731,19 +4537,19 @@ function CapturePage({
     const account = createLocalAccount(quickAccountName, quickAccountCurrency, crypto.randomUUID(), quickAccountType, quickAccountAllowNegative);
 
     if (!account) {
-      setQuickAccountError("Enter an account name before adding it.");
+      setQuickAccountError(t("capture.quickAccountNameRequired"));
       return;
     }
 
     if (accounts.some((item) => item.name.toLocaleLowerCase() === account.name.toLocaleLowerCase())) {
-      setQuickAccountError("An account with this name already exists.");
+      setQuickAccountError(t("capture.quickAccountDuplicate"));
       return;
     }
 
     const initialBalance = quickAccountBalance.trim();
     const initialBalanceAmount = Number(initialBalance);
     if (initialBalance && (!Number.isFinite(initialBalanceAmount) || initialBalanceAmount < 0)) {
-      setQuickAccountError("Initial balance must be zero or a positive amount.");
+      setQuickAccountError(t("capture.quickAccountBalanceInvalid"));
       return;
     }
 
@@ -3756,7 +4562,7 @@ function CapturePage({
       }, `fund-${account.id}`);
 
       if (!draft || !onSaveInitialFunding(account, draft)) {
-        setQuickAccountError("Enter a positive initial balance and a valid date.");
+        setQuickAccountError(t("capture.quickAccountFundingInvalid"));
         return;
       }
     }
@@ -4012,53 +4818,56 @@ function MealCaptureForm({
   onStopCamera: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <form className="meal-form" onSubmit={onSubmit}>
       <label>
-        <span>Meal time</span>
+        <span>{t("meal.time")}</span>
         <input required type="datetime-local" value={mealOccurredAt} onChange={(event) => onMealTimeChange(event.target.value)} />
       </label>
       <label>
-        <span>Meal note</span>
-        <textarea value={mealNote} onChange={(event) => onMealNoteChange(event.target.value)} placeholder="Optional" />
+        <span>{t("meal.note")}</span>
+        <textarea value={mealNote} onChange={(event) => onMealNoteChange(event.target.value)} placeholder={t("meal.optionalPlaceholder")} />
       </label>
       <MealPhotoPicker onOpenCamera={onOpenCamera} onAppendPhotos={onAppendPhotos} />
       {isCameraOpen ? <MealCameraDialog cameraVideoRef={cameraVideoRef} onCapturePhoto={onCapturePhoto} onStopCamera={onStopCamera} /> : null}
       {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
-      {mealPhotoFiles.length > 0 ? <p className="field-help">{countLabel(mealPhotoFiles.length, "photo")} ready for this meal. You can add more before saving.</p> : null}
-      <button className="primary-action align-start" type="submit">Save meal</button>
+      {mealPhotoFiles.length > 0 ? <p className="field-help">{t("meal.photosReady", { count: mealPhotoFiles.length })}</p> : null}
+      <button className="primary-action align-start" type="submit">{t("meal.save")}</button>
       {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
       {mealSavedMessage ? <p className="auth-message" aria-live="polite">{mealSavedMessage}</p> : null}
-      {uploadQueue.length > 0 ? <p className="field-help">{countLabel(uploadQueue.length, "media file")} queued locally for a future upload.</p> : null}
+      {uploadQueue.length > 0 ? <p className="field-help">{t("meal.queueCount", { count: uploadQueue.length })}</p> : null}
     </form>
   );
 }
 
 function MealPhotoPicker({ onOpenCamera, onAppendPhotos }: Readonly<{ onOpenCamera: () => Promise<void>; onAppendPhotos: (files: PhotoInput) => void }>) {
+  const { t } = useI18n();
   return (
     <div className="meal-photo-picker">
-      <span className="meal-field-label">Meal photos</span>
+      <span className="meal-field-label">{t("meal.photos")}</span>
       <div className="meal-photo-actions">
-        <button className="meal-file-action" type="button" onClick={() => { onOpenCamera().catch(() => undefined); }}><Camera size={18} aria-hidden="true" /><span>Take photo</span></button>
-        <label className="meal-file-action" htmlFor="meal-photos"><ImagePlus size={18} aria-hidden="true" /><span>Choose photos</span><input id="meal-photos" aria-label="Meal photos" accept="image/*" multiple type="file" onChange={(event) => onAppendPhotos(event.target.files)} /></label>
+        <button className="meal-file-action" type="button" onClick={() => { onOpenCamera().catch(() => undefined); }}><Camera size={18} aria-hidden="true" /><span>{t("meal.takePhoto")}</span></button>
+        <label className="meal-file-action" htmlFor="meal-photos"><ImagePlus size={18} aria-hidden="true" /><span>{t("meal.choosePhoto")}</span><input id="meal-photos" aria-label={t("meal.photos")} accept="image/*" multiple type="file" onChange={(event) => onAppendPhotos(event.target.files)} /></label>
       </div>
     </div>
   );
 }
 
 function MealCameraDialog({ cameraVideoRef, onCapturePhoto, onStopCamera }: Readonly<{ cameraVideoRef: React.RefObject<HTMLVideoElement>; onCapturePhoto: () => void; onStopCamera: () => void }>) {
+  const { t } = useI18n();
   return (
-    <dialog className="camera-capture-dialog" aria-label="Take meal photo" open>
-      <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
-      <div className="camera-capture-actions"><button className="primary-action" type="button" onClick={onCapturePhoto}>Capture photo</button><button className="secondary-action" type="button" onClick={onStopCamera}>Cancel</button></div>
+    <dialog className="camera-capture-dialog" aria-label={t("meal.dialogTitle")} open>
+      <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label={t("meal.cameraAria")} />
+      <div className="camera-capture-actions"><button className="primary-action" type="button" onClick={onCapturePhoto}>{t("meal.takePhoto")}</button><button className="secondary-action" type="button" onClick={onStopCamera}>{t("common.cancel")}</button></div>
     </dialog>
   );
 }
 
 function MealCapturePanel(props: Readonly<React.ComponentProps<typeof MealCaptureForm>>) {
+  const { t } = useI18n();
   return (
-    <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
-      <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
+    <Panel key="record-meal" title={t("meal.panelTitle")} eyebrow={t("meal.panelEyebrow")}>
       <MealCaptureForm {...props} />
     </Panel>
   );
@@ -4090,11 +4899,13 @@ function TransferFields({
 }
 
 function TransferModeField({ transferMode, onSetTransferMode }: Readonly<{ transferMode: DraftForm["transferMode"]; onSetTransferMode: (mode: DraftForm["transferMode"]) => void }>) {
-  return <section className="transfer-mode full-span" aria-label="Transfer type"><fieldset className="segmented-fieldset"><legend>Transfer type</legend><div className="segmented-control">{(["same-currency", "cross-currency"] as const).map((mode) => <label className={transferMode === mode ? "active" : ""} key={mode}><input checked={transferMode === mode} name="transfer-mode" type="radio" value={mode} onChange={() => onSetTransferMode(mode)} /><span>{mode === "same-currency" ? "Same currency" : "Cross currency"}</span></label>)}</div></fieldset></section>;
+  const { t } = useI18n();
+  return <section className="transfer-mode full-span" aria-label={t("capture.transferTypeAria")}><fieldset className="segmented-fieldset"><legend>{t("capture.transferTypeLegend")}</legend><div className="segmented-control">{(["same-currency", "cross-currency"] as const).map((mode) => <label className={transferMode === mode ? "active" : ""} key={mode}><input checked={transferMode === mode} name="transfer-mode" type="radio" value={mode} onChange={() => onSetTransferMode(mode)} /><span>{mode === "same-currency" ? t("capture.sameCurrency") : t("capture.crossCurrency")}</span></label>)}</div></fieldset></section>;
 }
 
 function TransferDestinationField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectDestinationAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: QuickAccountField | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: QuickAccountField) => void; onSelectDestinationAccount: (name: string) => void }>) {
-  return <div className="form-field"><label htmlFor="entry-destination-account"><span>Destination account</span></label><div className="field-control-row"><select id="entry-destination-account" required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => onSelectDestinationAccount(event.target.value)}><option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>{accounts.filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency)).map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => onBeginQuickAccountSetup("transferAccount")}><Plus size={18} aria-hidden="true" /></button></div>{accounts.length < 2 ? <p className="field-help">Transfers move money between two accounts. Add a second account to continue.</p> : null}{quickAccountField === "transferAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
+  const { t } = useI18n();
+  return <div className="form-field"><label htmlFor="entry-destination-account"><span>{t("capture.destinationAccount")}</span></label><div className="field-control-row"><select id="entry-destination-account" required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => onSelectDestinationAccount(event.target.value)}><option value="">{accounts.length < 2 ? t("capture.addAnotherAccount") : t("capture.selectDestinationAccount")}</option>{accounts.filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency)).map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label={t("capture.addDestinationAccount")} title={t("capture.addDestinationAccount")} onClick={() => onBeginQuickAccountSetup("transferAccount")}><Plus size={18} aria-hidden="true" /></button></div>{accounts.length < 2 ? <p className="field-help">{t("capture.transferNeedsTwo")}</p> : null}{quickAccountField === "transferAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
 }
 
 function FeeFields({
@@ -4114,18 +4925,19 @@ function FeeFields({
   onSelectFeeAccount: (name: string) => void;
   onUpdateForm: (field: keyof DraftForm, value: string) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <>
       <FeeAccountField form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={onBeginQuickAccountSetup} onSelectFeeAccount={onSelectFeeAccount} />
-      <AmountField id="entry-fee-amount" label="Fee amount" value={form.feeAmount} onChange={(value) => onUpdateForm("feeAmount", value)} />
-      <div className="form-field"><span>Fee currency</span><output className="derived-value">{form.feeCurrency}</output></div>
-      <label><span>Fee category</span><input value={form.feeCategory} onChange={(event) => onUpdateForm("feeCategory", event.target.value)} placeholder="Fees" /></label>
+      <AmountField id="entry-fee-amount" label={t("field.feeAmount")} value={form.feeAmount} currency={form.feeCurrency} onChange={(value) => onUpdateForm("feeAmount", value)} />
+      <label><span>{t("field.feeCategory")}</span><input value={form.feeCategory} onChange={(event) => onUpdateForm("feeCategory", event.target.value)} placeholder={t("capture.merchantPlaceholder")} /></label>
     </>
   );
 }
 
 function FeeAccountField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectFeeAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: QuickAccountField | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: QuickAccountField) => void; onSelectFeeAccount: (name: string) => void }>) {
-  return <div className="form-field"><label htmlFor="entry-fee-account"><span>Fee account</span></label><div className="field-control-row"><select id="entry-fee-account" value={form.feeAccount} onChange={(event) => onSelectFeeAccount(event.target.value)}><option value="">Select fee account</option>{accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label="Add fee account" title="Add fee account" onClick={() => onBeginQuickAccountSetup("feeAccount")}><Plus size={18} aria-hidden="true" /></button></div>{quickAccountField === "feeAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
+  const { t } = useI18n();
+  return <div className="form-field"><label htmlFor="entry-fee-account"><span>{t("field.feeAccount")}</span></label><div className="field-control-row"><select id="entry-fee-account" value={form.feeAccount} onChange={(event) => onSelectFeeAccount(event.target.value)}><option value="">{t("capture.selectFeeAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label={t("capture.addFeeAccount")} title={t("capture.addFeeAccount")} onClick={() => onBeginQuickAccountSetup("feeAccount")}><Plus size={18} aria-hidden="true" /></button></div>{quickAccountField === "feeAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
 }
 
 function ScanCapturePanel({
@@ -4164,25 +4976,25 @@ function ScanCapturePanel({
     if (media && media.status !== "uploaded") onClearUploads([media.id]);
   };
 
+  const { t } = useI18n();
   return (
-    <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
-      <p className="panel-copy">Scans remain temporary until you explicitly keep or discard them. They do not create official ledger records.</p>
+    <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow={t("scan.temporarySource")}>
       <form className="meal-form" onSubmit={onSubmit}>
         <label>
-          <span>Scan images</span>
+          <span>{t("scan.images")}</span>
           <input accept="image/*" multiple type="file" onChange={(event) => onScanFilesChange(Array.from(event.target.files ?? []))} />
         </label>
-        {scanFiles.length > 0 ? <p className="field-help">Selected {countLabel(scanFiles.length, "image")}.</p> : null}
+        {scanFiles.length > 0 ? <p className="field-help">{t("scan.selectedCount", { count: scanFiles.length })}</p> : null}
         <div className="capture-actions">
-          <button className="primary-action" type="submit" disabled={scanFiles.length === 0}>Keep scan drafts</button>
-          {scanFiles.length > 0 ? <button className="quiet-action" type="button" onClick={(event) => { event.currentTarget.form?.reset(); onScanFilesChange([]); }}>Clear selected</button> : null}
+          <button className="primary-action" type="submit" disabled={scanFiles.length === 0}>{t("scan.keepDraft")}</button>
+          {scanFiles.length > 0 ? <button className="quiet-action" type="button" onClick={(event) => { event.currentTarget.form?.reset(); onScanFilesChange([]); }}>{t("scan.clearSelected")}</button> : null}
         </div>
         {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
         {scanSavedMessage ? <p className="auth-message" aria-live="polite">{scanSavedMessage}</p> : null}
-        {queuedScanCount > 0 ? <p className="field-help">{countLabel(queuedScanCount, "scan file")} queued locally for a future upload.</p> : null}
-        {unavailableScanCount > 0 ? <p className="field-help">{countLabel(unavailableScanCount, "scan file")} needs the original image selected again.</p> : null}
+        {queuedScanCount > 0 ? <p className="field-help">{t("scan.queueCount", { count: queuedScanCount })}</p> : null}
+        {unavailableScanCount > 0 ? <p className="field-help">{t("scan.needsReselect", { count: unavailableScanCount })}</p> : null}
       </form>
-      <div className="source-list" aria-label="Temporary scans">
+      <div className="source-list" aria-label={t("scan.tempListAria")}>
         {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => {
           const media = scanQueue.find((item) => item.id === scan.id);
           const previewUrl = mediaPreviewUrls[scan.id];
@@ -4192,20 +5004,20 @@ function ScanCapturePanel({
             <article className="source-list-row" key={scan.id}>
               <div className="source-preview-frame">
                 {previewUrl
-                  ? <img src={previewUrl} alt={`Preview of ${scan.fileName}`} />
-                  : <span>Preview unavailable</span>}
+                  ? <img src={previewUrl} alt={t("scan.previewAlt", { name: scan.fileName })} />
+                  : <span>{t("scan.noPreview")}</span>}
               </div>
               <div className="source-list-copy">
                 <strong>{scan.fileName}</strong>
-                <small>{scan.state === "temporary" ? "Temporary · expires in 24 hours" : "Kept for review"}</small>
+                <small>{scan.state === "temporary" ? t("scan.tempStatus") : t("scan.retainedStatus")}</small>
                 <small>{storageStatus}</small>
               </div>
               {scan.state === "temporary" ? (
                 <div className="source-list-actions">
-                  <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>Keep source</button>
-                  <button className="quiet-action" type="button" onClick={() => removeScan(scan)}>Discard</button>
+                  <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>{t("scan.keepSource")}</button>
+                  <button className="quiet-action" type="button" onClick={() => removeScan(scan)}>{t("scan.discard")}</button>
                 </div>
-              ) : <button className="quiet-action source-remove-action" type="button" onClick={() => removeScan(scan)}>Remove source</button>}
+              ) : <button className="quiet-action source-remove-action" type="button" onClick={() => removeScan(scan)}>{t("scan.removeSource")}</button>}
             </article>
           );
         })}
@@ -4215,9 +5027,9 @@ function ScanCapturePanel({
 }
 
 function scanStorageStatus(media?: UploadQueueItem): string {
-  if (media?.status === "uploaded") return "Cloud image uploaded";
-  if (!media || media.bytesStatus === "metadata-only") return "Original image must be selected again";
-  return "Image available on this device";
+  if (media?.status === "uploaded") return t("scan.uploadedCloud");
+  if (!media || media.bytesStatus === "metadata-only") return t("scan.reselectOriginal");
+  return t("scan.storedOnDevice");
 }
 
 type AttachmentQueueSummary = {
@@ -4253,16 +5065,17 @@ function AttachmentUploadSummary({ queue, onClearUploads }: Readonly<{
   queue: UploadQueueItem[];
   onClearUploads: (ids: string[]) => void;
 }>) {
+  const { t } = useI18n();
   if (queue.length === 0) return null;
   const summary = summarizeAttachmentQueue(queue);
   return (
     <div className="field-help upload-queue-summary" aria-live="polite">
-      {summary.synced > 0 ? <p>{countLabel(summary.synced, "photo")} synced.</p> : null}
-      {summary.metadataPending > 0 ? <p>{countLabel(summary.metadataPending, "photo")} uploaded; cloud metadata pending.</p> : null}
-      {summary.failed > 0 ? <p>{countLabel(summary.failed, "photo")} failed. Select the original file again to retry.</p> : null}
-      {summary.needsReselect > 0 ? <p>{countLabel(summary.needsReselect, "photo")} needs the original file selected again.</p> : null}
-      {summary.local > 0 ? <p>{countLabel(summary.local, "photo")} saved locally. Cloud image backup is not enabled in this version.</p> : null}
-      {summary.pendingIds.length > 0 ? <button className="quiet-action" type="button" onClick={() => onClearUploads(summary.pendingIds)}>Clear pending attachments</button> : null}
+      {summary.synced > 0 ? <p>{t("attach.synced", { count: summary.synced })}</p> : null}
+      {summary.metadataPending > 0 ? <p>{t("attach.metadataPending", { count: summary.metadataPending })}</p> : null}
+      {summary.failed > 0 ? <p>{t("attach.failed", { count: summary.failed })}</p> : null}
+      {summary.needsReselect > 0 ? <p>{t("attach.needsReselect", { count: summary.needsReselect })}</p> : null}
+      {summary.local > 0 ? <p>{t("attach.local", { count: summary.local })}</p> : null}
+      {summary.pendingIds.length > 0 ? <button className="quiet-action" type="button" onClick={() => onClearUploads(summary.pendingIds)}>{t("attach.clearPending")}</button> : null}
     </div>
   );
 }
@@ -4278,18 +5091,18 @@ function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSa
 }>) {
   const attachmentQueue = uploadQueue.filter((item) => item.kind === "attachment");
 
+  const { t } = useI18n();
   return (
-    <Panel key="attach-photo" title="Attach photo" eyebrow="Supporting evidence">
-      <p className="panel-copy">Attach one or more photos without creating a meal or ledger record. The photos stay separate from clean ledger exports.</p>
+    <Panel key="attach-photo" title={t("attach.panelTitle")} eyebrow={t("attach.eyebrow")}>
       <form className="meal-form" onSubmit={onSubmit}>
         <label>
-          <span>Photos</span>
-          <input aria-label="Attachment photos" accept="image/*" multiple type="file" onChange={(event) => onFilesChange(Array.from(event.target.files ?? []))} />
+          <span>{t("attach.photoLabel")}</span>
+          <input aria-label={t("attach.photoAria")} accept="image/*" multiple type="file" onChange={(event) => onFilesChange(Array.from(event.target.files ?? []))} />
         </label>
-        {attachmentFiles.length > 0 ? <p className="field-help">{countLabel(attachmentFiles.length, "photo")} ready to attach.</p> : null}
+        {attachmentFiles.length > 0 ? <p className="field-help">{t("attach.ready", { count: attachmentFiles.length })}</p> : null}
         <div className="capture-actions">
-          <button className="primary-action" type="submit" disabled={attachmentFiles.length === 0}>Keep attachments</button>
-          {attachmentFiles.length > 0 ? <button className="quiet-action" type="button" onClick={() => onFilesChange([])}>Clear selected</button> : null}
+          <button className="primary-action" type="submit" disabled={attachmentFiles.length === 0}>{t("attach.keep")}</button>
+          {attachmentFiles.length > 0 ? <button className="quiet-action" type="button" onClick={() => onFilesChange([])}>{t("attach.clearSelected")}</button> : null}
         </div>
         {attachmentError ? <p className="quick-account-error" role="alert">{attachmentError}</p> : null}
         {attachmentSavedMessage ? <p className="auth-message" aria-live="polite">{attachmentSavedMessage}</p> : null}
@@ -4300,12 +5113,13 @@ function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSa
 }
 
 function SavedRecordPanel({ recordCount, navigate }: Readonly<{ recordCount: number; navigate: (item: NavItem) => void }>) {
+  const { t } = useI18n();
   if (recordCount === 0) return null;
   return (
-    <Panel title="Record saved" eyebrow="Local ledger">
-      <p className="panel-copy">{countLabel(recordCount, "official local record")} stored on this device.</p>
+    <Panel title={t("capture.savedRecordsPanel")} eyebrow={t("capture.savedRecordsEyebrow")}>
+      <p className="panel-copy">{t("capture.savedRecordsCopy", { count: recordCount })}</p>
       <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
-        Open Ledger
+        {t("capture.openLedger")}
       </button>
     </Panel>
   );
@@ -4313,6 +5127,7 @@ function SavedRecordPanel({ recordCount, navigate }: Readonly<{ recordCount: num
 
 type AccountSetupPanelProps = {
   accounts: LocalAccount[];
+  balances: ReturnType<typeof calculateAccountBalances>;
   accountName: string;
   accountCurrency: string;
   accountType: string;
@@ -4332,43 +5147,45 @@ type AccountSetupPanelProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
-type AccountSetupFormProps = Omit<AccountSetupPanelProps, "accounts" | "onReopenOnboarding">;
+type AccountSetupFormProps = Omit<AccountSetupPanelProps, "accounts" | "balances" | "onReopenOnboarding">;
 
 function AccountSetupForm({
   accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
   onAccountNameChange, onAccountCurrencyChange, onAccountTypeChange, onAllowNegativeBalanceChange, onBalanceModeChange,
   onBalanceChange, onBalanceDateChange, onSubmit,
 }: Readonly<AccountSetupFormProps>) {
+  const { t } = useI18n();
   return (
     <form className="draft-form account-setup-form" noValidate onSubmit={onSubmit}>
-      <label><span>Account name</span><input required pattern=".*\S.*" value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" /></label>
-      <label><span>Currency</span><select value={accountCurrency} onChange={(event) => onAccountCurrencyChange(event.target.value)}><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="USD">USD</option></select></label>
-      <label><span>Account type</span><select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}><option value="cash">Cash</option><option value="bank">Bank account</option><option value="card">Credit card</option><option value="wallet">Stored-value wallet</option><option value="other">Other</option></select></label>
-      <label className="checkbox-row"><input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} /><span>Allow negative balance</span></label>
+      <label><span>{t("field.accountName")}</span><input required pattern=".*\S.*" value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder={t("capture.dailyWalletPlaceholder")} /></label>
+      <label><span>{t("field.currency")}</span><select value={accountCurrency} onChange={(event) => onAccountCurrencyChange(event.target.value)}><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="USD">USD</option></select></label>
+      <label><span>{t("field.accountType")}</span><select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}><option value="cash">{t("field.accountTypeCash")}</option><option value="bank">{t("field.accountTypeBank")}</option><option value="card">{t("field.accountTypeCard")}</option><option value="wallet">{t("field.accountTypeWallet")}</option><option value="other">{t("field.accountTypeOther")}</option></select></label>
+      <label className="checkbox-row"><input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} /><span>{t("capture.allowNegativeBalance")}</span></label>
       <fieldset className="starting-balance-fieldset">
-        <legend>Starting balance</legend>
-        <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>Start from zero</span></label>
-        <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>Enter current balance</span></label>
+        <legend>{t("field.initialBalance")}</legend>
+        <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>{t("capture.startFromZero")}</span></label>
+        <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>{t("capture.enterCurrentBalance")}</span></label>
       </fieldset>
-      {balanceMode === "current" ? <div className="onboarding-balance-fields"><AmountField id="settings-current-balance" label="Current balance" required value={balance} onChange={onBalanceChange} placeholder="0" /><label><span>As of date</span><input required type="date" value={balanceDate} onChange={(event) => onBalanceDateChange(event.target.value)} /></label></div> : null}
-      <button className="primary-action align-start" type="submit">Add account</button>
+      {balanceMode === "current" ? <div className="onboarding-balance-fields"><AmountField id="settings-current-balance" label={t("field.currentBalance")} required value={balance} onChange={onBalanceChange} placeholder={t("capture.balancePlaceholder")} /><label><span>{t("field.asOfDate")}</span><input required type="date" value={balanceDate} onChange={(event) => onBalanceDateChange(event.target.value)} /></label></div> : null}
+      <button className="primary-action align-start" type="submit">{t("settings.addAccount")}</button>
       {accountError ? <p className="quick-account-error" role="alert">{accountError}</p> : null}
     </form>
   );
 }
 
 function AccountSetupPanel({
-  accounts, accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
+  accounts, balances, accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
   onAccountNameChange, onAccountCurrencyChange, onAccountTypeChange, onAllowNegativeBalanceChange, onBalanceModeChange,
   onBalanceChange, onBalanceDateChange, onReopenOnboarding, onSubmit,
 }: Readonly<AccountSetupPanelProps>) {
+  const { t } = useI18n();
+  const [adding, setAdding] = useState(false);
+  useEffect(() => setAdding(false), [accounts.length]);
   return (
-    <Panel title="Ledger accounts" eyebrow="Local setup">
-      <p className="panel-copy">Create the accounts that manual records may use. Accounts stay in this workspace and sync when cloud sync is enabled.</p>
-      <div className="account-setup-actions">
-        <button className="secondary-action align-start" type="button" onClick={onReopenOnboarding}>Open first-account setup</button>
-      </div>
-      <AccountSetupForm
+    <Panel title={t("settings.accountPanelTitle")} eyebrow={t("settings.accountPanelEyebrow")}>
+      {accounts.length > 0 ? <ul className="account-list" aria-label={t("settings.availableAccountsAria")}>{accounts.map((account) => <li key={account.id}><div><strong>{account.name}</strong><span>{t(`field.accountType${(account.accountType || "cash").replace(/^./, (letter) => letter.toUpperCase())}`)} · {account.currency}</span></div><strong>{formatAccountBalance(balances.find((item) => item.id === account.id)?.balance ?? 0, account.currency)}</strong></li>)}</ul> : null}
+      {accounts.length > 0 && !adding ? <button className="secondary-action align-start" type="button" onClick={() => setAdding(true)}><Plus size={18} aria-hidden="true" />{t("settings.addAccount")}</button> : null}
+      {accounts.length === 0 || adding ? <AccountSetupForm
         accountName={accountName}
         accountCurrency={accountCurrency}
         accountType={accountType}
@@ -4385,15 +5202,15 @@ function AccountSetupPanel({
         onBalanceChange={onBalanceChange}
         onBalanceDateChange={onBalanceDateChange}
         onSubmit={onSubmit}
-      />
-      {accounts.length === 0 ? <p className="panel-copy">No accounts yet. Add one before creating a manual record.</p> : null}
-      {accounts.length > 0 ? <ul className="account-list" aria-label="Available accounts">{accounts.map((account) => <li key={account.id}><strong>{account.name}</strong><span>{account.currency}</span></li>)}</ul> : null}
+      /> : null}
+      {adding ? <button className="quiet-action align-start" type="button" onClick={() => setAdding(false)}>{t("settings.categoryCancel")}</button> : null}
     </Panel>
   );
 }
 
-function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onReopenOnboarding }: Readonly<{
+function LedgerAccountsPanel({ accounts, records, onAddAccount, onSaveInitialFunding, onReopenOnboarding }: Readonly<{
   accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -4412,14 +5229,14 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
     const account = createLocalAccount(accountName, accountCurrency, draftId(), accountType, allowNegativeBalance);
 
     if (!account || accounts.some((item) => item.name.toLocaleLowerCase() === account.name.toLocaleLowerCase())) {
-      setAccountError(account ? "An account with this name already exists." : "Enter an account name and currency.");
+      setAccountError(account ? t("capture.quickAccountDuplicate") : t("capture.quickAccountNameCurrencyRequired"));
       return;
     }
 
     if (balanceMode === "current") {
       const draft = createInitialFundingDraft({ account: account.name, amount: balance, currency: account.currency, date: balanceDate }, `fund-${account.id}`);
       if (!draft || !onSaveInitialFunding(account, draft)) {
-        setAccountError("Enter a positive current balance and a valid date.");
+        setAccountError(t("settings.currentBalanceInvalid"));
         return;
       }
     }
@@ -4433,6 +5250,7 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   return (
     <AccountSetupPanel
       accounts={accounts}
+      balances={calculateAccountBalances(accounts, records)}
       accountName={accountName}
       accountCurrency={accountCurrency}
       accountType={accountType}
@@ -4454,105 +5272,347 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   );
 }
 
-type SettingsPageProps = {
+
+type SettingsPageProps = AccountPageProps & {
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   entityPolicy: AiEntityPolicy;
   onEntityPolicyChange: (policy: AiEntityPolicy) => void;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
+  deleteAction: DeleteAction;
+  onDeleteActionChange: (action: DeleteAction) => void;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  onNegativeBalancePolicyChange: (policy: NegativeBalancePolicy) => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
-  onOpenAccount: () => void;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 };
+
+type SettingsSection = "account" | "data" | "categories" | "preferences";
 
 function SettingsPage({
   accounts,
   records,
   entityPolicy,
   onEntityPolicyChange,
+  themeMode,
+  onThemeModeChange,
+  deleteAction,
+  onDeleteActionChange,
+  negativeBalancePolicy,
+  onNegativeBalancePolicyChange,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
-  onOpenAccount,
   onImportRecord,
   onMergeImportDraft,
+  ...accountProps
 }: Readonly<SettingsPageProps>) {
-  const [section, setSection] = useState<"ledger-accounts" | "portability" | "ai-capture">("ledger-accounts");
+  const { t } = useI18n();
+  const [section, setSection] = useState<SettingsSection>("account");
 
-  const renderSection = () => {
-    if (section === "ledger-accounts") {
-      return (
+  const renderPreferences = () => (
+    <section className="settings-section" aria-labelledby="settings-preferences-heading">
+      <h2 id="settings-preferences-heading">{t("settings.preferencesTab")}</h2>
+      <div className="route-stack">
         <LedgerAccountsPanel
           accounts={accounts}
+          records={records}
           onAddAccount={onAddAccount}
           onSaveInitialFunding={onSaveInitialFunding}
           onReopenOnboarding={onReopenOnboarding}
         />
-      );
-    }
-    if (section === "ai-capture") {
-      return (
-        <section className="settings-ai-policy" aria-labelledby="ai-capture-title">
-          <p className="eyebrow">Spoken capture</p>
-          <h2 id="ai-capture-title">Voice &amp; AI</h2>
-          <p className="panel-copy">
-            口說記帳時可否提到尚未建立的帳戶或類別;新帳戶以 TWD 建立(如同預設錢包),事後可在帳戶/類別管理修改。
-          </p>
+        <section className="settings-preferences-block" aria-labelledby="preferences-theme-title">
+          <p className="eyebrow">{t("settings.appearanceEyebrow")}</p>
+          <h2 id="preferences-theme-title">{t("settings.themeTitle")}</h2>
+          <ThemeControl value={themeMode} onChange={onThemeModeChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-delete-title">
+          <p className="eyebrow">{t("settings.ledgerEyebrow")}</p>
+          <h2 id="preferences-delete-title">{t("settings.deleteBehaviorTitle")}</h2>
+          <DeleteActionControl value={deleteAction} onChange={onDeleteActionChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-negative-title">
+          <p className="eyebrow">{t("settings.accountingEyebrow")}</p>
+          <h2 id="preferences-negative-title">{t("settings.negativePolicyTitle")}</h2>
+          <NegativeBalancePolicyControl value={negativeBalancePolicy} onChange={onNegativeBalancePolicyChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-localization-title">
+          <h2 id="preferences-localization-title">{t("settings.localeTitle")}</h2>
+          <LanguageControl />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
+          <p className="eyebrow">{t("settings.voiceEyebrow")}</p>
+          <h2 id="preferences-ai-title">{t("settings.aiPreferenceTitle")}</h2>
           <EntityPolicyRow
-            label="帳戶 Accounts"
+            label={t("settings.entityAccount")}
             value={entityPolicy.account}
             onChange={(value) => onEntityPolicyChange({ ...entityPolicy, account: value })}
           />
           <EntityPolicyRow
-            label="類別 Categories"
+            label={t("settings.entityCategory")}
             value={entityPolicy.category}
             onChange={(value) => onEntityPolicyChange({ ...entityPolicy, category: value })}
           />
         </section>
-      );
-    }
-    return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
-  };
+      </div>
+    </section>
+  );
+
+  const content = section === "account"
+    ? <AccountPage {...accountProps} />
+    : section === "data"
+      ? <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+      : section === "categories"
+        ? <CategoriesPanel records={records} customCategories={customCategories} setCustomCategories={setCustomCategories} />
+        : renderPreferences();
+
+  const tabs: Array<{ id: SettingsSection; label: string }> = [
+    { id: "account", label: t("settings.accountTab") },
+    { id: "data", label: t("settings.dataTab") },
+    { id: "categories", label: t("settings.categoriesTab") },
+    { id: "preferences", label: t("settings.preferencesTab") },
+  ];
 
   return (
     <section className="settings-page">
-      <section className="settings-account-entry" aria-labelledby="cloud-account-title">
-        <div>
-          <p className="eyebrow">Optional cloud features</p>
-          <h2 id="cloud-account-title">Cloud &amp; account</h2>
-          <p>Keep using MealLedger locally, or sign in when you are ready to sync this workspace.</p>
-        </div>
-        <button className="secondary-action" type="button" onClick={onOpenAccount}>
-          <UserRound size={18} aria-hidden="true" />
-          Manage cloud access
-        </button>
-      </section>
-      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-        <button className={`settings-tab ${section === "ledger-accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ledger-accounts"} onClick={() => setSection("ledger-accounts")}>Money accounts</button>
-        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
-        <button className={`settings-tab ${section === "ai-capture" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ai-capture"} onClick={() => setSection("ai-capture")}>Voice &amp; AI</button>
+      <div className="settings-tabs" role="tablist" aria-label={t("settings.sectionsAria")}>
+        {tabs.map((tab) => (
+          <button
+            className={`settings-tab ${section === tab.id ? "active" : ""}`}
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={section === tab.id}
+            onClick={() => setSection(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
-      {renderSection()}
+      <div className="settings-content" role="tabpanel">
+        {content}
+      </div>
     </section>
   );
 }
 
-const ENTITY_POLICY_OPTIONS: Array<{ value: AiEntityPolicyOption; label: string; hint: string }> = [
-  { value: "existing", label: "只能歸類到現有", hint: "講到不存在的帳戶/類別時,草稿會被拒絕並顯示原因" },
-  { value: "ask", label: "詢問是否新增", hint: "草稿帶新名稱,確認寫入前先詢問是否建立" },
-  { value: "auto", label: "直接新增", hint: "確認寫入時直接建立(帳戶以 TWD 建立),事後可修改或刪除" },
+const THEME_OPTIONS: Array<{ value: ThemeMode; labelKey: string }> = [
+  { value: "dark", labelKey: "settings.themeDark" },
+  { value: "light", labelKey: "settings.themeLight" },
+  { value: "system", labelKey: "settings.themeSystem" },
+];
+
+const DELETE_ACTION_OPTIONS: Array<{ value: DeleteAction; labelKey: string; hintKey: string }> = [
+  { value: "void", labelKey: "settings.deleteVoid", hintKey: "settings.deleteVoidHint" },
+  { value: "hard-delete", labelKey: "settings.deleteHard", hintKey: "settings.deleteHardHint" },
+];
+
+const NEGATIVE_BALANCE_OPTIONS: Array<{ value: NegativeBalancePolicy; labelKey: string; hintKey: string }> = [
+  { value: "allow", labelKey: "settings.negativeAllow", hintKey: "settings.negativeAllowHint" },
+  { value: "reject", labelKey: "settings.negativeReject", hintKey: "settings.negativeRejectHint" },
+];
+
+function NegativeBalancePolicyControl({ value, onChange }: Readonly<{ value: NegativeBalancePolicy; onChange: (policy: NegativeBalancePolicy) => void }>) {
+  const { t } = useI18n();
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>{t("settings.negativeLegend")}</legend>
+      {NEGATIVE_BALANCE_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={t(option.hintKey)}>
+          <input type="radio" name="negative-balance" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{t(option.labelKey)}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function DeleteActionControl({ value, onChange }: Readonly<{ value: DeleteAction; onChange: (action: DeleteAction) => void }>) {
+  const { t } = useI18n();
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>{t("settings.deleteActionLegend")}</legend>
+      {DELETE_ACTION_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={t(option.hintKey)}>
+          <input type="radio" name="delete-action" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{t(option.labelKey)}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function ThemeControl({ value, onChange }: Readonly<{ value: ThemeMode; onChange: (mode: ThemeMode) => void }>) {
+  const { t } = useI18n();
+  return (
+    <fieldset className="entity-policy-row">
+      <legend className="visually-hidden">{t("settings.themeLegend")}</legend>
+      {THEME_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option">
+          <input type="radio" name="theme" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{t(option.labelKey)}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+// Language switcher for the 本地化 preferences block. Changing the locale
+// persists it, updates <html lang>, and re-renders every subscribed component
+// through the i18n context (see src/i18n).
+function LanguageControl() {
+  const { locale, setLocale } = useI18n();
+  return (
+    <fieldset className="entity-policy-row">
+      <legend className="visually-hidden">{t("settings.localeTitle")}</legend>
+      {["zh-TW", "en-US"].map((code) => (
+        <label key={code} className="entity-policy-option">
+          <input
+            type="radio"
+            name="locale"
+            value={code}
+            checked={locale === code}
+            onChange={() => setLocale(code as "zh-TW" | "en-US")}
+          />
+          <span>{code === "zh-TW" ? t("settings.localeZhTW") : t("settings.localeEnUS")}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function CategoriesPanel({ records, customCategories, setCustomCategories }: Readonly<{
+  records: LocalLedgerRecord[];
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
+}>) {
+  const { t } = useI18n();
+  const used = new Set(records.map((record) => record.category).filter((value): value is string => Boolean(value)));
+  const all = [...new Set([...expenseCategories, ...incomeCategories, ...customCategories, ...used])].sort((a, b) => a.localeCompare(b));
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    if (!record.category) continue;
+    counts.set(record.category, (counts.get(record.category) ?? 0) + 1);
+  }
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [error, setError] = useState("");
+
+  const isCustom = (name: string) => customCategories.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase());
+  const normalized = (name: string) => name.trim().replace(/\s+/g, " ");
+
+  const addCategory = () => {
+    const name = normalized(newName);
+    if (!name) {
+      setError(t("settings.categoryNameRequired"));
+      return;
+    }
+    if (all.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError(t("settings.categoryExists"));
+      return;
+    }
+    setCustomCategories((current) => [...current, name]);
+    setNewName("");
+    setAdding(false);
+    setError("");
+  };
+
+  const renameCategory = (previous: string) => {
+    const name = normalized(editName);
+    if (!name) {
+      setError(t("settings.categoryRenameRequired"));
+      return;
+    }
+    if (name.toLocaleLowerCase() !== previous.toLocaleLowerCase() && all.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError(t("settings.categoryExists"));
+      return;
+    }
+    setCustomCategories((current) => current.map((item) => item.toLocaleLowerCase() === previous.toLocaleLowerCase() ? name : item));
+    setEditing(null);
+    setError("");
+  };
+
+  const removeCategory = (name: string) => {
+    setCustomCategories((current) => current.filter((item) => item.toLocaleLowerCase() !== name.toLocaleLowerCase()));
+    setError("");
+  };
+
+  return (
+    <section className="settings-preferences-block" aria-labelledby="categories-title">
+      <h2 id="categories-title">{t("settings.categoriesTitle")}</h2>
+      {adding ? (
+        <div className="category-add-form">
+          <label htmlFor="new-category-name">{t("settings.categoryNew")}</label>
+          <input id="new-category-name" type="text" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={t("settings.categoryNewPlaceholder")} />
+          <button className="secondary-action" type="button" onClick={addCategory}>{t("settings.categoryAddThis")}</button>
+          <button className="quiet-action" type="button" onClick={() => { setAdding(false); setError(""); }}>{t("settings.categoryCancel")}</button>
+        </div>
+      ) : (
+        <button className="secondary-action align-start" type="button" onClick={() => setAdding(true)}>{t("settings.categoryAdd")}</button>
+      )}
+      {error ? <p className="auth-message" role="alert">{error}</p> : null}
+      {all.length > 0 ? (
+        <ul className="category-list">
+          {all.map((category) => {
+            const count = counts.get(category);
+            return (
+              <li key={category}>
+                {editing === category ? (
+                  <span className="category-edit-row">
+                    <input type="text" value={editName} onChange={(event) => setEditName(event.target.value)} aria-label={t("settings.categoryRenameAria", { name: category })} />
+                    <button className="text-action" type="button" onClick={() => renameCategory(category)}>{t("settings.categorySave")}</button>
+                    <button className="quiet-action" type="button" onClick={() => { setEditing(null); setError(""); }}>{t("settings.categoryCancel")}</button>
+                  </span>
+                ) : (
+                  <>
+                    <span className="category-list-name">{category}</span>
+                    {count ? <span className="category-list-count">{t("settings.categoryCount", { count })}</span> : null}
+                    {isCustom(category) ? (
+                      <span className="category-row-actions">
+                        <button className="text-action" type="button" onClick={() => { setEditing(category); setEditName(category); setError(""); }}>{t("settings.categoryRename")}</button>
+                        <button className="text-action danger-action" type="button" onClick={() => removeCategory(category)}>{t("settings.categoryDelete")}</button>
+                      </span>
+                    ) : (
+                      <span className="category-list-builtin">{t("settings.categoryBuiltin")}</span>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="panel-copy">{t("settings.categoryEmpty")}</p>
+      )}
+    </section>
+  );
+}
+
+const ENTITY_POLICY_OPTIONS: Array<{ value: AiEntityPolicyOption; labelKey: string; hintKey: string }> = [
+  { value: "existing", labelKey: "settings.entityPolicyExisting", hintKey: "settings.entityPolicyExistingHint" },
+  { value: "ask", labelKey: "settings.entityPolicyAsk", hintKey: "settings.entityPolicyAskHint" },
+  { value: "auto", labelKey: "settings.entityPolicyAuto", hintKey: "settings.entityPolicyAutoHint" },
 ];
 
 function EntityPolicyRow({ label, value, onChange }: Readonly<{ label: string; value: AiEntityPolicyOption; onChange: (value: AiEntityPolicyOption) => void }>) {
+  const { t } = useI18n();
   return (
     <fieldset className="entity-policy-row">
       <legend>{label}</legend>
       {ENTITY_POLICY_OPTIONS.map((option) => (
-        <label key={option.value} className="entity-policy-option" title={option.hint}>
+        <label key={option.value} className="entity-policy-option" title={t(option.hintKey)}>
           <input type="radio" name={label} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
-          <span>{option.label}</span>
+          <span>{t(option.labelKey)}</span>
         </label>
       ))}
     </fieldset>
@@ -4567,6 +5627,7 @@ function PasswordInput({ id, value, autoComplete, visible, onValueChange, onTogg
   onValueChange: (value: string) => void;
   onToggleVisible: () => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="password-field">
       <input
@@ -4580,7 +5641,7 @@ function PasswordInput({ id, value, autoComplete, visible, onValueChange, onTogg
       <button
         type="button"
         className="password-toggle"
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={visible ? t("auth.hidePassword") : t("auth.showPassword")}
         onClick={onToggleVisible}
       >
         {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
@@ -4589,7 +5650,7 @@ function PasswordInput({ id, value, autoComplete, visible, onValueChange, onTogg
   );
 }
 
-function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onRecoverPasswordFromLink, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
+function AccountPage({ headingId, authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onRecoverPasswordFromLink, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -4602,6 +5663,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [newPasswordVisible, setNewPasswordVisible] = useState(false);
+  const { t } = useI18n();
   const [authView, setAuthView] = useState<"sign-in" | "sign-up" | "forgot-password">("sign-in");
   const [signUpError, setSignUpError] = useState("");
 
@@ -4616,7 +5678,8 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const previousAuthMessage = useRef(authMessage);
   useEffect(() => {
-    if (authView === "sign-up" && authMessage === ALREADY_REGISTERED_MESSAGE && previousAuthMessage.current !== ALREADY_REGISTERED_MESSAGE) {
+    const alreadyRegistered = alreadyRegisteredMessage();
+    if (authView === "sign-up" && authMessage === alreadyRegistered && previousAuthMessage.current !== alreadyRegistered) {
       switchAuthView("sign-in");
     }
     previousAuthMessage.current = authMessage;
@@ -4630,7 +5693,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
   const handleSignUp = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (password !== confirmPassword) {
-      setSignUpError("Passwords do not match.");
+      setSignUpError(t("auth.passwordMismatch"));
       return;
     }
     onSignUp(email, password).catch(() => undefined);
@@ -4653,12 +5716,12 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const renderAuthModeSwitch = () => (
     <fieldset className="segmented-fieldset">
-      <legend className="visually-hidden">Sign in or create account</legend>
+      <legend className="visually-hidden">{t("auth.signInOrSignUp")}</legend>
       <div className="segmented-control">
         {(["sign-in", "sign-up"] as const).map((view) => (
           <label className={authView === view ? "active" : ""} key={view}>
             <input checked={authView === view} name="auth-view" type="radio" value={view} onChange={() => switchAuthView(view)} />
-            <span>{view === "sign-in" ? "Sign in" : "Create account"}</span>
+            <span>{view === "sign-in" ? t("auth.signIn") : t("auth.signUp")}</span>
           </label>
         ))}
       </div>
@@ -4667,13 +5730,13 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const renderProviderActions = () => (
     <>
-      <p className="auth-divider">or use</p>
+      <p className="auth-divider">{t("auth.orUse")}</p>
       <div className="auth-provider-actions">
         <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
-          <img className="auth-provider-mark" src={googleG} alt="" /> Continue with Google
+          <img className="auth-provider-mark" src={googleG} alt="" /> {t("auth.continueWithGoogle")}
         </button>
         <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
-          <img className="auth-provider-mark" src={facebookF} alt="" /> Continue with Facebook
+          <img className="auth-provider-mark" src={facebookF} alt="" /> {t("auth.continueWithFacebook")}
         </button>
       </div>
     </>
@@ -4681,19 +5744,19 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const accountSubmitLabel = (): string => {
     if (authView === "sign-up") {
-      return authState === "loading" ? "Creating account..." : "Create account";
+      return authState === "loading" ? t("auth.creatingAccount") : t("auth.signUp");
     }
-    return authState === "loading" ? "Signing in..." : "Continue";
+    return authState === "loading" ? t("auth.signingIn") : t("auth.continue");
   };
 
   const renderRecoveryForm = () => (
     <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
-      <p className="field-help">Set a new password to finish resetting your account.</p>
-      <label htmlFor="account-new-password">New password</label>
+      <p className="field-help">{t("auth.recoveryIntro")}</p>
+      <label htmlFor="account-new-password">{t("auth.newPassword")}</label>
       <PasswordInput id="account-new-password" value={newPassword} autoComplete="new-password" visible={newPasswordVisible} onValueChange={setNewPassword} onToggleVisible={() => setNewPasswordVisible((current) => !current)} />
       <button className="primary-action auth-submit" type="submit">
         <KeyRound size={18} aria-hidden="true" />
-        Set new password
+        {t("auth.setNewPassword")}
       </button>
       {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
     </form>
@@ -4702,28 +5765,28 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
   const renderForgotPasswordForm = () => (
     <>
       <form className="auth-form account-page-form" onSubmit={handlePasswordReset}>
-        <p className="field-help">Enter your email and we will send a link to reset your password.</p>
-        <label htmlFor="account-reset-email">Email</label>
+        <p className="field-help">{t("auth.forgotIntro")}</p>
+        <label htmlFor="account-reset-email">{t("auth.email")}</label>
         <input id="account-reset-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
           <KeyRound size={18} aria-hidden="true" />
-          {authState === "loading" ? "Sending link..." : "Send reset link"}
+          {authState === "loading" ? t("auth.sendingLink") : t("auth.sendResetLink")}
         </button>
-        <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>Back to sign in</button>
+        <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>{t("auth.backToSignIn")}</button>
       </form>
       {showRecoveryLink ? (
         <form className="auth-form account-page-form" onSubmit={handleRecoveryLink}>
-          <p className="field-help">Reset link opened in your browser instead of here? Paste the full link from the email to finish on this device.</p>
-          <label htmlFor="account-reset-link">Reset link</label>
+          <p className="field-help">{t("auth.recoveryLinkIntro")}</p>
+          <label htmlFor="account-reset-link">{t("auth.resetLink")}</label>
           <input id="account-reset-link" type="url" inputMode="url" autoComplete="url" required value={recoveryLink} onChange={(event) => setRecoveryLink(event.target.value)} placeholder="https://.../account#access_token=..." />
           <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
             <KeyRound size={18} aria-hidden="true" />
-            {authState === "loading" ? "Checking link..." : "Use reset link"}
+            {authState === "loading" ? t("auth.checkingLink") : t("auth.useResetLink")}
           </button>
         </form>
       ) : (
         <button className="quiet-action auth-forgot-action" type="button" onClick={() => setShowRecoveryLink(true)}>
-          Reset link opened in another browser? Paste it here
+          {t("auth.pasteRecoveryLink")}
         </button>
       )}
       {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
@@ -4733,18 +5796,16 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
   const renderAuthForm = () => (
     <form className="auth-form account-page-form" onSubmit={authView === "sign-up" ? handleSignUp : handleSignIn}>
       {renderAuthModeSwitch()}
-      <label htmlFor="account-email">Email</label>
+      <label htmlFor="account-email">{t("auth.email")}</label>
       <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
       <div className="auth-password-row">
-        <label htmlFor="account-password">Password</label>
-        {authView === "sign-in" ? (
-          <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>Forgot password?</button>
-        ) : null}
+        <label htmlFor="account-password">{t("auth.password")}</label>
       </div>
       <PasswordInput id="account-password" value={password} autoComplete={authView === "sign-up" ? "new-password" : "current-password"} visible={passwordVisible} onValueChange={setPassword} onToggleVisible={() => setPasswordVisible((current) => !current)} />
+      {authView === "sign-in" ? <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>{t("auth.forgotPassword")}</button> : null}
       {authView === "sign-up" ? (
         <>
-          <label htmlFor="account-confirm-password">Confirm password</label>
+          <label htmlFor="account-confirm-password">{t("auth.confirmPassword")}</label>
           <PasswordInput id="account-confirm-password" value={confirmPassword} autoComplete="new-password" visible={confirmPasswordVisible} onValueChange={setConfirmPassword} onToggleVisible={() => setConfirmPasswordVisible((current) => !current)} />
           {signUpError ? <p className="auth-message" role="alert">{signUpError}</p> : null}
         </>
@@ -4760,21 +5821,21 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const renderHandoffForm = () => (
     <div className="auth-form account-page-form">
-      <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
-      <dl className="handoff-list" aria-label="Local data handoff summary">
-        <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
-        <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
-        <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
-        <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
-        <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
+      <p className="field-help">{t("auth.handoffIntro")}</p>
+      <dl className="handoff-list" aria-label={t("auth.handoffSummaryAria")}>
+        <div><dt>{t("auth.handoffAccounts")}</dt><dd>{handoffCounts.accounts}</dd></div>
+        <div><dt>{t("auth.handoffRecords")}</dt><dd>{handoffCounts.records}</dd></div>
+        <div><dt>{t("auth.handoffDrafts")}</dt><dd>{handoffCounts.drafts}</dd></div>
+        <div><dt>{t("auth.handoffMeals")}</dt><dd>{handoffCounts.meals}</dd></div>
+        <div><dt>{t("auth.handoffMedia")}</dt><dd>{handoffCounts.media}</dd></div>
       </dl>
       <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
         <Cloud size={18} aria-hidden="true" />
-        Confirm cloud handoff
+        {t("auth.confirmCloudHandoff")}
       </button>
       <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
         <LogOut size={18} aria-hidden="true" />
-        Sign out
+        {t("auth.signOut")}
       </button>
     </div>
   );
@@ -4783,18 +5844,17 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     const hasEmailIdentity = identities.some((identity) => identity.provider === "email");
     return (
       <div className="auth-form account-page-form">
-        <p className="field-help">Cloud sync is enabled for this workspace.</p>
         <output className={`account-storage-status ${storageStatus.tone}`} aria-live="polite">
           <strong>{storageStatus.label}</strong>
           <span>{storageStatus.detail}</span>
         </output>
         <fieldset className="linked-identities">
-          <legend>Sign-in methods</legend>
+          <legend>{t("auth.signInMethods")}</legend>
           <ul>
             {hasEmailIdentity ? (
               <li className="identity-row">
-                <span className="identity-name">Email &amp; password</span>
-                <span className="identity-badge">Primary</span>
+                <span className="identity-name">{t("auth.emailPassword")}</span>
+                <span className="identity-badge">{t("auth.primary")}</span>
               </li>
             ) : null}
             {(["google", "facebook"] as const).map((provider) => {
@@ -4806,9 +5866,9 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
                     {provider === "google" ? "Google" : "Facebook"}
                   </span>
                   {identity ? (
-                    <button className="quiet-action" type="button" onClick={() => onUnlinkIdentity(identity).catch(() => undefined)}>Unlink</button>
+                    <button className="quiet-action" type="button" onClick={() => onUnlinkIdentity(identity).catch(() => undefined)}>{t("auth.unlink")}</button>
                   ) : (
-                    <button className="quiet-action" type="button" onClick={() => onLinkIdentity(provider).catch(() => undefined)}>Link {provider === "google" ? "Google" : "Facebook"}</button>
+                    <button className="quiet-action" type="button" onClick={() => onLinkIdentity(provider).catch(() => undefined)}>{provider === "google" ? t("auth.linkGoogle") : t("auth.linkFacebook")}</button>
                   )}
                 </li>
               );
@@ -4817,7 +5877,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
         </fieldset>
         <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
           <LogOut size={18} aria-hidden="true" />
-          Sign out
+          {t("auth.signOut")}
         </button>
         {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
       </div>
@@ -4830,7 +5890,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     }
     if (!isSignedIn) {
       if (isLocalDevelopmentMode) {
-        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
+        return <p className="field-help">{t("auth.localPreviewNoAuth")}</p>;
       }
       if (authView === "forgot-password") {
         return renderForgotPasswordForm();
@@ -4845,25 +5905,28 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   return (
     <div className="account-page">
-      <Panel title="Optional cloud sync">
+      <Panel id={headingId} title={t("auth.optionalCloudSync")}>
         {renderAccountContent()}
       </Panel>
     </div>
   );
 }
 
-function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
+function ImportExportPanel({ headingId, accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
+  headingId?: string;
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 }>) {
-  const [importMessage, setImportMessage] = useState("No CSV selected. Validation does not write to the ledger.");
+  const { t } = useI18n();
+  const [importMessage, setImportMessage] = useState(t("import.initialMessage"));
   const [selectedFileName, setSelectedFileName] = useState("");
   const [importItems, setImportItems] = useState<ImportReviewItem[]>([]);
   const [exportMessage, setExportMessage] = useState("");
   const [exportProgress, setExportProgress] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState("csv");
 
   const handleCsvSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -4875,15 +5938,15 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
 
     const result = validateCsvBytes(new Uint8Array(await file.arrayBuffer()));
     if (!result.ok) {
-      setImportMessage(`CSV rejected: ${result.errors.join(" ")}`);
+      setImportMessage(t("import.rejected", { errors: result.errors.join(" ") }));
       setImportItems([]);
       return;
     }
 
     const headerMapping = mapImportHeaders(result.headers);
     const mappedFields = Object.keys(headerMapping.mapping).join(", ");
-    const unmapped = headerMapping.unmappedHeaders.length > 0 ? ` Unmapped: ${headerMapping.unmappedHeaders.join(", ")}.` : "";
-    const conflicts = headerMapping.conflicts.length > 0 ? ` Conflicts: ${headerMapping.conflicts.join(" ")}` : "";
+    const unmapped = headerMapping.unmappedHeaders.length > 0 ? t("import.unmapped", { fields: headerMapping.unmappedHeaders.join(", ") }) : "";
+    const conflicts = headerMapping.conflicts.length > 0 ? t("import.conflicts", { fields: headerMapping.conflicts.join(" ") }) : "";
     const rowResults = validateImportRows(result.rows.map((row) => mapImportRow(result.headers, row, headerMapping)), accounts);
     const duplicateReviews = detectImportDuplicates(rowResults.map((row) => ({ rowNumber: row.rowNumber, normalized: row.normalized })), records);
     const aliasReviews = rowResults.flatMap((row) => {
@@ -4906,7 +5969,17 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
       duplicates: duplicateReviews.get(row.rowNumber) ?? [],
       status: "pending",
     })));
-    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts}${aliasMessage}${duplicateMessage} No records were created.`);
+    setImportMessage(t("import.ready", {
+      rows: result.rowCount,
+      columns: result.headers.length,
+      mapped: mappedFields || t("import.noMapped"),
+      ready: result.rowCount - reviewCount,
+      review: reviewCount,
+      unmapped,
+      conflicts,
+      aliases: aliasMessage,
+      duplicates: duplicateMessage,
+    }));
   };
 
   const confirmImport = (item: ImportReviewItem) => {
@@ -4916,7 +5989,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
 
     const imported = onImportRecord(item.normalized, item.reviewId);
     setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: importStatus("confirmed", imported) } : candidate));
-    setImportMessage(imported ? `Imported row ${item.rowNumber} into the local ledger.` : `Row ${item.rowNumber} could not be imported and remains in review.`);
+    setImportMessage(imported ? t("import.rowImported", { row: item.rowNumber }) : t("import.rowImportFailed", { row: item.rowNumber }));
   };
 
   const keepSeparate = (item: ImportReviewItem) => {
@@ -4926,7 +5999,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
 
     const imported = onImportRecord(item.normalized, item.reviewId);
     setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: importStatus("kept-separate", imported) } : candidate));
-    setImportMessage(imported ? `Kept row ${item.rowNumber} as a separate local ledger record.` : `Row ${item.rowNumber} could not be kept and remains in review.`);
+    setImportMessage(imported ? t("import.rowKeptSeparate", { row: item.rowNumber }) : t("import.rowKeepFailed", { row: item.rowNumber }));
   };
 
   const linkExisting = (item: ImportReviewItem) => {
@@ -4936,7 +6009,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     }
 
     setImportItems((current) => current.map((reviewItem) => reviewItem.reviewId === item.reviewId ? { ...reviewItem, status: "linked" } : reviewItem));
-    setImportMessage(`Linked row ${item.rowNumber} to ${duplicateCandidateName(candidate)} without changing the ledger.`);
+    setImportMessage(t("import.rowLinked", { row: item.rowNumber, candidate: duplicateCandidateName(candidate) }));
   };
 
   const mergeIntoDraft = (item: ImportReviewItem) => {
@@ -4946,12 +6019,12 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
 
     const merged = onMergeImportDraft(item.normalized, item.reviewId);
     setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: importStatus("merged", merged) } : candidate));
-    setImportMessage(merged ? `Moved row ${item.rowNumber} into local review drafts without changing the ledger.` : `Row ${item.rowNumber} could not become a draft and remains in review.`);
+    setImportMessage(merged ? t("import.rowMerged", { row: item.rowNumber }) : t("import.rowMergeFailed", { row: item.rowNumber }));
   };
 
   const skipImport = (item: ImportReviewItem) => {
     setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: "skipped" } : candidate));
-    setImportMessage(`Skipped row ${item.rowNumber}. It was not written to the ledger.`);
+    setImportMessage(t("import.rowSkipped", { row: item.rowNumber }));
   };
 
   const exportZip = async () => {
@@ -4961,7 +6034,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
 
     setExporting(true);
     setExportProgress(0);
-    setExportMessage("Preparing ZIP export...");
+    setExportMessage(t("export.zipPreparing"));
     try {
       const bundle = await createMultiTableExportWithProgress(accounts, records, (percentage, stage) => {
         setExportProgress(percentage);
@@ -4974,57 +6047,55 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
   };
 
   return (
-    <Panel title="Import and export safeguards" eyebrow="Data portability">
-      <p className="panel-copy">
-        Clean exports include confirmed ledger records only. Attachments stay as metadata
-        references, not image bytes, and CSV/JSON use the same stable field set.
-      </p>
+    <Panel id={headingId} title={t("import.panelTitle")} eyebrow={t("import.panelEyebrow")}>
       <section className="portability-section" aria-labelledby="ledger-export-heading">
-        <h3 id="ledger-export-heading">Export ledger</h3>
-        <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
+        <h3 id="ledger-export-heading">{t("import.exportHeading")}</h3>
         <div className="export-actions">
-          <button className="primary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage("CSV export downloaded. Image bytes were not included."); }}>Export CSV</button>
-          <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage("JSON export downloaded. Image bytes were not included."); }}>Export JSON</button>
-          <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
+          <select aria-label={t("import.exportFormat")} value={exportFormat} disabled={exporting} onChange={(event) => setExportFormat(event.target.value)}><option value="csv">CSV</option><option value="json">JSON</option><option value="zip">ZIP</option></select>
+          <button className="primary-action" type="button" disabled={exporting} onClick={() => {
+            if (exportFormat === "zip") { exportZip().catch(() => undefined); return; }
+            downloadTextFile(exportFormat === "csv" ? serializeCleanCsv(records) : serializeCleanJson(records), `mealledger-ledger.${exportFormat}`, exportFormat === "csv" ? "text/csv;charset=utf-8" : "application/json;charset=utf-8");
+            setExportMessage(t(exportFormat === "csv" ? "import.csvDownloaded" : "import.jsonDownloaded"));
+          }}>{exporting ? t("import.exportZipProgress", { percent: exportProgress }) : t(exportFormat === "csv" ? "import.exportCsv" : exportFormat === "json" ? "import.exportJson" : "import.exportZip")}</button>
         </div>
         {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
       </section>
       <section className="portability-section" aria-labelledby="csv-import-heading">
-        <h3 id="csv-import-heading">Import a CSV</h3>
+        <h3 id="csv-import-heading">{t("import.importCsvHeading")}</h3>
         <div className="file-picker">
-          <input id="csv-import-file" className="file-picker-input" aria-label="CSV import file" accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
-          <label className="secondary-action file-picker-button" htmlFor="csv-import-file">Choose CSV file</label>
-          <span className="file-picker-name" aria-live="polite">{selectedFileName || "No file selected"}</span>
+          <input id="csv-import-file" className="file-picker-input" aria-label={t("import.csvFileAria")} accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
+          <label className="secondary-action file-picker-button" htmlFor="csv-import-file">{t("import.chooseCsv")}</label>
+          <span className="file-picker-name" aria-live="polite">{selectedFileName || t("import.noFileSelected")}</span>
         </div>
-        <p className="panel-copy" aria-live="polite">{importMessage}</p>
+        {selectedFileName ? <p className="panel-copy" aria-live="polite">{importMessage}</p> : null}
       </section>
       {importItems.length > 0 ? (
-        <section className="draft-list" aria-label="CSV import review">
+        <section className="draft-list" aria-label={t("import.reviewEyebrow")}>
           <div className="draft-list-heading">
             <div>
-              <p className="eyebrow">Import review</p>
-              <h3>Rows waiting</h3>
+              <p className="eyebrow">{t("import.reviewEyebrow")}</p>
+              <h3>{t("import.pendingRows")}</h3>
             </div>
-            <span>{importItems.filter((item) => item.status === "pending").length} pending</span>
+            <span>{t("import.pendingCount", { count: importItems.filter((item) => item.status === "pending").length })}</span>
           </div>
           {importItems.map((item) => (
             <article className="draft-card" key={item.reviewId}>
               <div>
-                <strong>Row {item.rowNumber} · {item.normalized.kind || "Unknown kind"}</strong>
-                <span>{item.normalized.date || item.normalized.period_start || "No date"} · {item.normalized.account || "No account"} · {item.normalized.amount || "No amount"}</span>
+                <strong>{t("import.rowTitle", { row: item.rowNumber, kind: item.normalized.kind || t("import.unknownKind") })}</strong>
+                <span>{item.normalized.date || item.normalized.period_start || t("import.noDate")} · {item.normalized.account || t("import.noAccount")} · {item.normalized.amount || t("import.noAmount")}</span>
                 {item.errors.length > 0 ? <span>{item.errors.join(" ")}</span> : null}
                 {item.aliasReview ? <span>{item.aliasReview}</span> : null}
-                {item.duplicates.length > 0 ? <span>Duplicate candidate: {item.duplicates.map(duplicateCandidateLabel).join("; ")}</span> : null}
-                {item.status !== "pending" ? <span>Status: {item.status}</span> : null}
+                {item.duplicates.length > 0 ? <span>{t("import.duplicates", { items: item.duplicates.map(duplicateCandidateLabel).join("; ") })}</span> : null}
+                {item.status !== "pending" ? <span>{t("import.status", { status: item.status })}</span> : null}
               </div>
                 <div className="record-actions">
-                <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.duplicates.length > 0 || item.status !== "pending"} onClick={() => confirmImport(item)}>Confirm import row {item.rowNumber}</button>
+                <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.duplicates.length > 0 || item.status !== "pending"} onClick={() => confirmImport(item)}>{t("import.confirmRow", { row: item.rowNumber })}</button>
                 {item.duplicates.length > 0 ? <>
-                  <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => keepSeparate(item)}>Keep separate row {item.rowNumber}</button>
-                  <button className="text-action" type="button" disabled={item.status !== "pending"} onClick={() => linkExisting(item)}>Link existing row {item.rowNumber}</button>
-                  <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => mergeIntoDraft(item)}>Merge to draft row {item.rowNumber}</button>
+                  <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => keepSeparate(item)}>{t("import.keepSeparateRow", { row: item.rowNumber })}</button>
+                  <button className="text-action" type="button" disabled={item.status !== "pending"} onClick={() => linkExisting(item)}>{t("import.linkExistingRow", { row: item.rowNumber })}</button>
+                  <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => mergeIntoDraft(item)}>{t("import.mergeDraftRow", { row: item.rowNumber })}</button>
                 </> : null}
-                <button className="text-action danger-action" type="button" disabled={item.status !== "pending"} onClick={() => skipImport(item)}>Skip row {item.rowNumber}</button>
+                <button className="text-action danger-action" type="button" disabled={item.status !== "pending"} onClick={() => skipImport(item)}>{t("import.skipRow", { row: item.rowNumber })}</button>
               </div>
             </article>
           ))}
@@ -5035,24 +6106,25 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
 }
 
 function NotFoundPage({ navigate }: Readonly<{ navigate: (item: NavItem) => void }>) {
+  const { t } = useI18n();
   return (
-    <Panel title="Page not found" eyebrow="Safe recovery">
-      <p className="panel-copy">This page is not part of the current workspace. Return to Overview.</p>
+    <Panel title={t("notFound.title")} eyebrow={t("notFound.eyebrow")}>
+      <p className="panel-copy">{t("notFound.copy")}</p>
       <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("overview"))}>
         <Home size={18} aria-hidden="true" />
-        Go to Overview
+        {t("notFound.goOverview")}
       </button>
     </Panel>
   );
 }
 
-function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow?: string; children: React.ReactNode }>) {
+function Panel({ title, eyebrow, id, children }: Readonly<{ title: string; eyebrow?: string; id?: string; children: React.ReactNode }>) {
   return (
     <article className="panel">
       <div className="panel-heading">
         <div>
           {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-          <h2>{title}</h2>
+          <h2 id={id}>{title}</h2>
         </div>
       </div>
       {children}
@@ -5060,45 +6132,33 @@ function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow?:
   );
 }
 
-function EmptyMetric({ label, value, detail }: Readonly<{ label: string; value: string; detail: string }>) {
-  return (
-    <article className="summary-card">
-      <p>{label}</p>
-      <strong>{value}</strong>
-      <span>{detail}</span>
-    </article>
-  );
-}
-
-const kindLabels: Record<DraftForm["kind"], string> = {
-  expense: "Expense",
-  income: "Income",
-  transfer: "Transfer",
-  refund: "Refund",
-  "fund-addition": "Initial funding",
-  adjustment: "Balance adjustment",
-  "unresolved-expense": "Unresolved expense",
+const kindLabelKeys: Record<DraftForm["kind"], string> = {
+  expense: "kind.expense",
+  income: "kind.income",
+  transfer: "kind.transfer",
+  refund: "kind.refund",
+  "fund-addition": "kind.fundAddition",
+  adjustment: "kind.adjustment",
+  "unresolved-expense": "kind.unresolvedExpense",
 };
 
 function kindLabel(kind: DraftForm["kind"]): string {
-  return kindLabels[kind];
+  return t(kindLabelKeys[kind]);
 }
 
 function routeTitle(route: AppRoute) {
   switch (route) {
     case "overview":
-      return "Overview";
+      return t("route.overview");
     case "ledger":
-      return "Ledger";
+      return t("route.ledger");
     case "capture":
-      return "Capture";
+      return t("route.capture");
     case "zone":
-      return "Zone";
+      return t("route.zone");
     case "settings":
-      return "Settings";
-    case "account":
-      return "Account";
+      return t("route.settings");
     default:
-      return "Unknown route";
+      return t("route.notFound");
   }
 }

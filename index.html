@@ -1,14 +1,53 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
+    <script>
+      // Apply the persisted/browser-detected locale to <html lang> before
+      // first paint (mirrors the theme script below). The React i18n store
+      // keeps this in sync at runtime and on language switch.
+      (function () {
+        try {
+          var stored = localStorage.getItem("mealledger.locale");
+          var locale = stored === "en-US" ? "en-US" : stored === "zh-TW" ? "zh-TW" : null;
+          if (!locale) locale = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh-TW" : "en-US";
+          document.documentElement.lang = locale === "zh-TW" ? "zh-Hant" : "en";
+        } catch (error) {
+          // No storage access: keep the zh-Hant default from the markup.
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f4ee" />
+    <meta name="theme-color" content="#171a1c" />
+    <!-- Declaring the icon is also what stops the browser from asking for a
+         /favicon.ico this project does not ship: that request 404s and logs a
+         console error the end-to-end specs (correctly) refuse to tolerate. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>MealLedger</title>
+    <script>
+      // Apply the persisted theme before first paint so there is no flash of
+      // the wrong theme. Default is 深色 per the settings spec; only an
+      // explicit "light" choice forces the light palette, and "system" follows
+      // the OS preference. The React app keeps this in sync at runtime.
+      (function () {
+        try {
+          var stored = localStorage.getItem("mealledger.settings.theme");
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = stored === "light"
+            ? "light"
+            : stored === "system"
+              ? prefersDark ? "dark" : "light"
+              : "dark";
+          document.documentElement.dataset.theme = resolved;
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", resolved === "dark" ? "#171a1c" : "#f5f2ec");
+        } catch (error) {
+          // No storage access: keep the dark default from the markup above.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

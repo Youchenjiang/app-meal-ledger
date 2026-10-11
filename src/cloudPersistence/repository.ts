@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type {
   CloudPersistenceClient,
   CloudMealBundle,
@@ -53,7 +54,7 @@ async function readExistingIdempotency(
       ok: false,
       failure: {
         code: "idempotency",
-        message: "The idempotency key was reused with a different request hash.",
+        message: t("cloud.idempotencyReuse"),
         retryable: false,
         table: "idempotency_keys",
       },
@@ -86,7 +87,7 @@ export async function persistAccounts(
   if (!userId || rows.some((row) => row.user_id !== userId)) {
     return {
       ok: false,
-      failure: { code: "validation", message: "Account rows must share one user_id.", retryable: false, table: "accounts" },
+      failure: { code: "validation", message: t("cloud.accountsSameUser"), retryable: false, table: "accounts" },
     };
   }
 
@@ -102,7 +103,7 @@ export async function persistProfile(
   if (!userId) {
     return {
       ok: false,
-      failure: { code: "validation", message: "Profile rows require a user_id.", retryable: false, table: "profiles" },
+      failure: { code: "validation", message: t("cloud.profileNeedsUser"), retryable: false, table: "profiles" },
     };
   }
 
@@ -182,7 +183,7 @@ export async function persistRecordBundle(
       ok: false,
       failure: {
         code: "validation",
-        message: "Ledger record bundles require the atomic cloud RPC boundary and were kept local-only.",
+        message: t("cloud.atomicRpcNeeded"),
         retryable: false,
         table: "ledger_records",
       },

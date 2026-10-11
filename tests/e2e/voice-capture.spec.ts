@@ -15,12 +15,12 @@ function collectBrowserErrors(page: Page) {
 
 async function openWorkspace(page: Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
 }
 
 async function openVoiceCapture(page: Page) {
   await page.getByRole("button", { name: "新增", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Capture", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "新增", exact: true })).toBeVisible();
 }
 
 test("switches the voice capture mode from the page header", async ({ page }) => {
@@ -33,18 +33,19 @@ test("switches the voice capture mode from the page header", async ({ page }) =>
   await expect(page.getByRole("tab", { name: "整段口說" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "逐欄口說" })).toBeVisible();
 
-  // 新增 defaults to 逐欄口說 (mode B): the field-by-field panel renders.
-  await expect(page.getByRole("tab", { name: "整段口說" })).toHaveAttribute("aria-selected", "false");
-  await expect(page.getByRole("tab", { name: "逐欄口說" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("第 1 步 · 共 7 步")).toBeVisible();
-
-  // 整段口說 (mode A) swaps in the free-text parse panel.
-  await page.getByRole("tab", { name: "整段口說" }).click();
+  // 新增 defaults to 整段口說 (mode A): the free-text parse panel renders, so a
+  // user can speak one sentence and let the parser fill every field.
+  await expect(page.getByRole("tab", { name: "整段口說" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "逐欄口說" })).toHaveAttribute("aria-selected", "false");
   await expect(page.getByPlaceholder(/例如:7\/25/u)).toBeVisible();
 
-  // Back to 逐欄口說 restores the step panel.
+  // 逐欄口說 (mode B) swaps in the field-by-field step panel.
   await page.getByRole("tab", { name: "逐欄口說" }).click();
   await expect(page.getByText("第 1 步 · 共 7 步")).toBeVisible();
+
+  // Back to 整段口說 restores the free-text panel.
+  await page.getByRole("tab", { name: "整段口說" }).click();
+  await expect(page.getByPlaceholder(/例如:7\/25/u)).toBeVisible();
 
   expect(errors).toEqual([]);
 });
@@ -53,13 +54,16 @@ test("completes a mode B capture from typed fields and saves an official record"
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "明細", exact: true }).click();
-  await page.getByRole("tab", { name: "Accounts", exact: true }).click();
-  await page.getByLabel("Account name").fill("Daily wallet");
-  await page.getByRole("button", { name: "Add account" }).click();
-  await expect(page.getByLabel("Available accounts")).toContainText("Daily wallet");
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
+  await page.getByLabel("帳戶名稱").fill("Daily wallet");
+  await page.getByRole("button", { name: "新增帳戶" }).click();
+  await expect(page.getByLabel("可用帳戶")).toContainText("Daily wallet");
 
   await openVoiceCapture(page);
+  // 新增 defaults to 整段口說 (mode A); this flow exercises the 逐欄口說 (mode B)
+  // field-by-field capture, so switch to it from the header first.
+  await page.getByRole("tab", { name: "逐欄口說" }).click();
   await expect(page.getByRole("tab", { name: "逐欄口說" })).toHaveAttribute("aria-selected", "true");
 
   // Without an AI key the panel falls back to the raw typed/recognized value;
@@ -69,7 +73,7 @@ test("completes a mode B capture from typed fields and saves an official record"
     ["日期", "2026-08-01"],
     ["類型", "支出"],
     ["帳戶", "Daily wallet"],
-    ["類別", "Daily"],
+    ["類別", "日用"],
     ["對象", "全聯"],
     ["品項", "香蕉"],
     ["金額", "417"],
@@ -90,9 +94,9 @@ test("completes a mode B capture from typed fields and saves an official record"
 
   // The confirmed record lands in the local ledger.
   await page.getByRole("button", { name: "明細", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Confirmed ledger records")).toContainText("全聯");
-  await expect(page.getByText("No confirmed ledger records yet.")).not.toBeVisible();
+  await expect(page.getByRole("heading", { name: "明細", exact: true })).toBeVisible();
+  await expect(page.getByLabel("已確認的明細記錄")).toContainText("全聯");
+  await expect(page.getByText("尚無已確認的明細記錄。")).not.toBeVisible();
 
   expect(errors).toEqual([]);
 });

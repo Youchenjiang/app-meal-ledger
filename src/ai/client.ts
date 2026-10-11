@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { readAiConfig } from "./config";
 import { supabase } from "../lib/supabase";
 
@@ -64,7 +65,7 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
     // dropped an error response before the browser could read it (which is
     // how a provider overload surfaces here after the proxy's retries). The
     // client cannot distinguish these, so stay honest and actionable.
-    throw new Error("AI 服務暫時無法使用(供應商超載或連線問題),請稍後再試。若使用本機 Supabase,請確認已啟動。");
+    throw new Error(t("ai.unavailable"));
   }
   if (!response.ok) {
     // 401 means the proxy (or its gateway) rejected the request. Without a
@@ -73,10 +74,10 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
     // actionable message instead of a bare HTTP status.
     if (response.status === 401) {
       throw new Error(token
-        ? "登入狀態已失效,請重新登入後再試。"
-        : "AI 補帳需要先登入:請到 Cloud & account 登入後,才能透過 AI 代理產生草稿。");
+        ? t("ai.sessionExpired")
+        : t("ai.loginRequired"));
     }
-    throw new Error(`AI request failed (${response.status}).`);
+    throw new Error(t("ai.requestFailed", { status: response.status }));
   }
   const payload = (await response.json()) as { data?: unknown; error?: string };
   if (payload.error) {
@@ -88,7 +89,7 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
 function extractImage(imageDataUrl: string): { mimeType: string; base64: string } {
   const match = /^data:([^;]+);base64,(.*)$/s.exec(imageDataUrl);
   if (!match) {
-    throw new Error("The selected image could not be read.");
+    throw new Error(t("ai.imageUnreadable"));
   }
   return { mimeType: match[1], base64: match[2] };
 }
@@ -96,7 +97,7 @@ function extractImage(imageDataUrl: string): { mimeType: string; base64: string 
 function parseJsonResponse(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) {
-    throw new Error("The AI returned an empty response.");
+    throw new Error(t("ai.emptyResponse"));
   }
   return JSON.parse(stripMarkdownFence(trimmed));
 }
@@ -144,12 +145,12 @@ async function requestOpenAi(baseUrl: string, apiKey: string, model: string, req
     }),
   });
   if (!response.ok) {
-    throw new Error(`AI request failed (${response.status}).`);
+    throw new Error(t("ai.requestFailed", { status: response.status }));
   }
   const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const content = payload.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error("The AI returned no content.");
+    throw new Error(t("ai.noContent"));
   }
   return parseJsonResponse(content);
 }
@@ -173,12 +174,12 @@ async function requestGemini(baseUrl: string, apiKey: string, model: string, req
     },
   );
   if (!response.ok) {
-    throw new Error(`AI request failed (${response.status}).`);
+    throw new Error(t("ai.requestFailed", { status: response.status }));
   }
   const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
   if (!text.trim()) {
-    throw new Error("The AI returned no content.");
+    throw new Error(t("ai.noContent"));
   }
   return parseJsonResponse(text);
 }
@@ -186,7 +187,7 @@ async function requestGemini(baseUrl: string, apiKey: string, model: string, req
 export async function requestAiJson(request: AiRequest): Promise<AiResult> {
   const config = readAiConfig();
   if (!config) {
-    return { ok: false, message: "AI 補帳尚未設定。請在 .env 設定 AI_API_KEY 與 AI_PROVIDER。" };
+    return { ok: false, message: t("ai.notConfigured") };
   }
   try {
     if (config.edgeFunctionUrl) {
@@ -202,6 +203,6 @@ export async function requestAiJson(request: AiRequest): Promise<AiResult> {
       : await requestOpenAi(baseUrl, config.apiKey, model, request);
     return { ok: true, data };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : "AI 請求失敗,請稍後再試。" };
+    return { ok: false, message: error instanceof Error ? error.message : t("ai.requestError") };
   }
 }

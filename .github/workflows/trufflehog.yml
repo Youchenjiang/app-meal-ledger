@@ -1,0 +1,49 @@
+# ==============================================================================
+# 🔑 TruffleHog Secrets & Credential Leak Scan (機敏資訊與金鑰洩漏即時防禦)
+#
+# 【功能說明】
+# 深度掃描 Git Commit 歷史與變更檔案，精準辨識 800+ 種常見 API Keys、私人私鑰 (Private Keys)、
+# 資料庫連線字串、雲端憑證 (AWS, GCP, Azure, OpenAI, GitHub Tokens 等)。
+#
+# 【關鍵特色】
+# 啟用 `--only-verified` 參數，僅對「真實有效且經端點驗證成功」的外洩金鑰報警，
+# 徹底杜絕假陽性 (False Positives) 雜訊干擾。
+#
+# 【觸發方式】
+# 1. 每次推送到主要分支 (main, master, dev)。
+# 2. 針對主要分支發起或更新 Pull Request。
+# ==============================================================================
+
+name: Secrets Scan
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+
+jobs:
+  trufflehog:
+    name: TruffleHog Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 完整簽出以利 Git 歷程追蹤
+
+      - name: TruffleHog Scan (Pull Request)
+        if: github.event_name == 'pull_request'
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.base_ref }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: TruffleHog Scan (Push)
+        if: github.event_name == 'push'
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --only-verified

@@ -10,8 +10,8 @@ export type RefundSubtype = "refund" | "payback";
 export type RefundExcessHandling = "unclassified" | "income" | "negative-expense" | "exchange_difference";
 export type RecurrenceChoice = "current-cycle-only" | "prompt-next-cycle" | "auto-record-next-cycle";
 export type RecurrenceAmountMode = "fixed" | "variable";
-export const missingCounterpartyLabel = "Merchant unavailable";
-export const missingItemNameLabel = "Item unavailable";
+export const missingCounterpartyLabel = "商家不詳";
+export const missingItemNameLabel = "品項不詳";
 
 export type DraftForm = {
   date: string;

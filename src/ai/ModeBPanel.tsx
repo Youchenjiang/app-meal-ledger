@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../i18n";
+import { useI18n } from "../i18n/react";
 import type { TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
@@ -8,8 +10,8 @@ import {
   buildFieldCorrectionSystemPrompt,
   buildModeBDraft,
   localToday,
-  MODE_B_FIELD_LABELS,
-  MODE_B_FIELD_PROMPTS,
+  modeBFieldLabel,
+  modeBFieldPrompt,
   modeBStepsFor,
   parseFieldCorrection,
   parseSpokenDate,
@@ -28,7 +30,7 @@ export type ModeBPanelProps = Readonly<{
   onResolveNewEntities?: (suggestion: NewEntityCarrier) => LocalAccount[] | false;
   // Writes the official record. extraAccounts carries the accounts created
   // for this write so validation sees them before the caller re-renders.
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft?: (draft: TransactionDraft) => void;
 }>;
 
@@ -39,10 +41,10 @@ function micNoteText(
   corrected: string | null,
   inputValue: string,
 ): string {
-  if (starting) return "正在啟動麥克風,請稍候…";
-  if (listening) return "正在聽…";
-  if (hasTranscript) return `AI 校對成「${corrected ?? inputValue}」，確認後填入`;
-  return "點擊麥克風開始說";
+  if (starting) return t("ai.micStarting");
+  if (listening) return t("ai.micListening");
+  if (hasTranscript) return t("ai.micCorrected", { value: corrected ?? inputValue });
+  return t("ai.micIdle");
 }
 
 // Speech engine state: microphone toggling, interim/final transcripts, and
@@ -102,10 +104,11 @@ function useModeBSpeech({
       .finally(() => setCorrecting(false));
   };
 
+  const { t } = useI18n();
   const toggleListening = () => {
     const Ctor = speechRecognition();
     if (!Ctor) {
-      onError("此瀏覽器不支援語音輸入,請改用文字輸入。");
+      onError(t("ai.speechUnsupportedB"));
       return;
     }
     if (listening || starting) {
@@ -154,7 +157,7 @@ function useModeBSpeech({
       setListening(false);
       setStarting(false);
       setLiveText("");
-      onError("語音辨識失敗,請再試一次或改用文字輸入。");
+      onError(t("ai.speechFailed"));
     };
     recognitionRef.current = recognition;
     setLiveText("");
@@ -234,10 +237,11 @@ function useModeBCapture({
     setError("");
   };
 
+  const { t } = useI18n();
   const confirmField = () => {
     const value = inputValue.trim();
     if (!value) {
-      setError("請先填入或說出這個欄位的內容。");
+      setError(t("ai.fieldBlank"));
       return;
     }
     const field = currentField;
@@ -271,14 +275,14 @@ function useModeBCapture({
     const today = localToday();
     const result = buildModeBDraft(values, accounts, categories, today, entityPolicy);
     if (!result.draft) {
-      setError(`欄位有問題:${result.issues.join(" ")}`);
+      setError(t("ai.fieldIssues", { issues: result.issues.join(" ") }));
       return;
     }
     const needsCreation = Boolean(result.newAccount || result.newCategory || result.newTransferAccount);
     let created: LocalAccount[] = [];
     if (needsCreation) {
       if (!onResolveNewEntities) {
-        setError("需要先建立新的帳戶/類別才能寫入,請先在設定中調整,或改用模式 A。");
+        setError(t("ai.newEntityFirstB"));
         return;
       }
       const resolved = onResolveNewEntities({
@@ -287,13 +291,14 @@ function useModeBCapture({
         newTransferAccount: result.newTransferAccount,
       });
       if (resolved === false) {
-        setError("新的帳戶/類別無法建立,請手動檢查。");
+        setError(t("ai.newEntityFailed"));
         return;
       }
       created = resolved;
     }
-    if (!onSaveRecord(result.draft, created)) {
-      setError("這筆記錄無法建立,請檢查帳戶與欄位。");
+    const saveReason = onSaveRecord(result.draft, created);
+    if (saveReason !== null) {
+      setError(saveReason);
       return;
     }
     setDone("saved");
@@ -305,7 +310,7 @@ function useModeBCapture({
     const today = localToday();
     const result = buildModeBDraft(values, accounts, categories, today, entityPolicy);
     if (!result.draft) {
-      setError(`欄位有問題:${result.issues.join(" ")}`);
+      setError(t("ai.fieldIssues", { issues: result.issues.join(" ") }));
       return;
     }
     onSaveDraft(result.draft);
@@ -361,13 +366,14 @@ export function ModeBPanel({
     return <ModeBDoneView done={capture.done} onReset={capture.resetAll} />;
   }
 
+  const { t } = useI18n();
   return (
     <div className="mode-b-panel">
       <p className="field-help">
-        欄位會一個一個亮起,念出內容填入;每一欄會先顯示 AI 校對結果,確認後才進下一欄。
+        {t("ai.modeBIntro")}
       </p>
       {!configured ? (
-        <output className="inline-message">尚未設定 AI 金鑰:將直接使用語音辨識的原始結果。</output>
+        <output className="inline-message">{t("ai.notConfiguredB")}</output>
       ) : null}
 
       <ModeBProgress steps={capture.steps} step={capture.step} values={capture.values} />
@@ -418,6 +424,7 @@ function ModeBProgress({
   step: number;
   values: Partial<Record<ModeBField, string>>;
 }>) {
+  const { t } = useI18n();
   return (
     <>
       <div className="mode-b-progress" aria-hidden="true">
@@ -429,10 +436,10 @@ function ModeBProgress({
         ))}
       </div>
 
-      <div className="mode-b-filled" aria-label="已填欄位">
+      <div className="mode-b-filled" aria-label={t("ai.filledAria")}>
         {steps.slice(0, step).map((field) => (
           <span className="mode-b-chip" key={field}>
-            <span>{MODE_B_FIELD_LABELS[field]}</span>
+            <span>{modeBFieldLabel(field)}</span>
             <b>{values[field]}</b>
           </span>
         ))}
@@ -442,13 +449,14 @@ function ModeBProgress({
 }
 
 function ModeBDoneView({ done, onReset }: Readonly<{ done: "saved" | "draft"; onReset: () => void }>) {
+  const { t } = useI18n();
   return (
     <div className="mode-b-panel">
       <div className="mode-b-done">
         <span className="mode-b-done-icon">✓</span>
-        <p>{done === "saved" ? "已確認並寫入正式記錄。" : "已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。"}</p>
+        <p>{done === "saved" ? t("ai.confirmedWritten") : t("ai.savedToQueue")}</p>
         <button className="primary-action" type="button" onClick={onReset}>
-          ↺ 重新開始
+          {t("ai.restart")}
         </button>
       </div>
     </div>
@@ -486,13 +494,14 @@ function ModeBStage({
   onRetry: () => void;
   onConfirm: () => void;
 }>) {
+  const { t } = useI18n();
   const hasTranscript = transcript !== "";
   return (
     <>
       <div className="mode-b-stage">
-        <p className="mode-b-step">第 {step + 1} 步 · 共 {steps.length} 步</p>
-        <p className="mode-b-field-name">{MODE_B_FIELD_LABELS[currentField]}</p>
-        <p className="mode-b-hint">{MODE_B_FIELD_PROMPTS[currentField]}</p>
+        <p className="mode-b-step">{t("ai.stepCount", { step: step + 1, total: steps.length })}</p>
+        <p className="mode-b-field-name">{modeBFieldLabel(currentField)}</p>
+        <p className="mode-b-hint">{modeBFieldPrompt(currentField)}</p>
         <ModeBMicControl
           listening={listening}
           starting={starting}
@@ -533,6 +542,7 @@ function ModeBMicControl({
   micNote: string;
   onToggle: () => void;
 }>) {
+  const { t } = useI18n();
   const active = listening || starting;
   return (
     <div className="mode-b-mic-wrap">
@@ -540,7 +550,7 @@ function ModeBMicControl({
       <button
         className={`mode-b-mic${active ? " listening" : ""}`}
         type="button"
-        aria-label={active ? "停止收音" : "用說的"}
+        aria-label={active ? t("ai.stopListening") : t("ai.sayIt")}
         onClick={onToggle}
       >
         🎙
@@ -567,27 +577,28 @@ function ModeBResultRow({
   correcting: boolean;
   onInputChange: (value: string) => void;
 }>) {
+  const { t } = useI18n();
   const isDate = currentField === "date";
   return (
     <div className="mode-b-result">
       <div className="mode-b-row">
-        <span className="mode-b-tag raw">聽到的</span>
+        <span className="mode-b-tag raw">{t("ai.heard")}</span>
         <span className="mode-b-txt" aria-live="polite">{transcript || "—"}</span>
       </div>
       <div className="mode-b-row ai-row">
-        <span className="mode-b-tag ai">AI 校對</span>
+        <span className="mode-b-tag ai">{t("ai.aiCorrected")}</span>
         <input
           id="mode-b-input"
           className="mode-b-input"
           type={isDate ? "date" : "text"}
           value={inputValue}
-          aria-label={MODE_B_FIELD_LABELS[currentField]}
+          aria-label={modeBFieldLabel(currentField)}
           onChange={(event) => onInputChange(event.target.value)}
-          placeholder={isDate ? undefined : "可直接打字,或按下「用說的」"}
+          placeholder={isDate ? undefined : t("ai.typePlaceholder")}
         />
       </div>
-      <p className="mode-b-ai-note">校對結果供你確認,可以直接修改後填入。</p>
-      {correcting ? <p className="field-help">AI 校對中…</p> : null}
+      <p className="mode-b-ai-note">{t("ai.correctionNote")}</p>
+      {correcting ? <p className="field-help">{t("ai.correcting")}</p> : null}
     </div>
   );
 }
@@ -607,13 +618,14 @@ function ModeBStageActions({
   onRetry: () => void;
   onConfirm: () => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="mode-b-actions">
       <button className="secondary-action" type="button" onClick={onRetry} disabled={!hasTranscript || listening}>
-        ↺ 重新說
+        {t("ai.sayAgain")}
       </button>
       <button className="primary-action" type="button" onClick={onConfirm} disabled={!inputValue.trim() || listening || correcting}>
-        ✓ 填入此欄
+        {t("ai.fillField")}
       </button>
     </div>
   );
@@ -632,28 +644,29 @@ function ModeBSummaryView({
   onSaveDraft?: () => void;
   onBack: () => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="mode-b-summary">
-      <h2>確認這筆記錄</h2>
+      <h2>{t("ai.confirmRecord")}</h2>
       <div className="mode-b-summary-list">
         {steps.map((field) => (
           <div className="mode-b-s-row" key={field}>
-            <dt>{MODE_B_FIELD_LABELS[field]}</dt>
+            <dt>{modeBFieldLabel(field)}</dt>
             <dd>{values[field]}</dd>
           </div>
         ))}
       </div>
       <div className="mode-b-actions">
         <button className="primary-action" type="button" onClick={onSave}>
-          ✓ 確認寫入
+          {t("ai.confirmWriteB")}
         </button>
         {onSaveDraft ? (
           <button className="secondary-action" type="button" onClick={onSaveDraft}>
-            存草稿
+            {t("ai.saveDraftB")}
           </button>
         ) : null}
         <button className="secondary-action" type="button" onClick={onBack}>
-          回去修改
+          {t("ai.backToEdit")}
         </button>
       </div>
     </div>

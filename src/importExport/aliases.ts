@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export type CategoryAliasReview = {
   input: string;
   status: "accepted" | "review";
@@ -7,42 +9,46 @@ export type CategoryAliasReview = {
   reason: string;
 };
 
-const ambiguousAliases: Record<string, Omit<CategoryAliasReview, "input" | "status">> = {
+// Reasons resolve through t() at call time so they follow the selected locale
+// instead of freezing at module load.
+type AmbiguousAlias = Omit<CategoryAliasReview, "input" | "status" | "reason"> & { reasonKey: string };
+
+const ambiguousAliases: Record<string, AmbiguousAlias> = {
   特殊: {
     suggestedCategory: null,
     suggestedEvent: null,
     suggestedTag: null,
-    reason: "Choose a more specific category such as fee, fine, deposit, ticket, gift, or treat.",
+    reasonKey: "import.aliasMoreSpecific",
   },
   "0": {
     suggestedCategory: "缺漏支出",
     suggestedEvent: null,
     suggestedTag: null,
-    reason: "This label is treated as unresolved/import review, not a normal category.",
+    reasonKey: "import.aliasUnresolved",
   },
   "?": {
     suggestedCategory: "缺漏支出",
     suggestedEvent: null,
     suggestedTag: null,
-    reason: "This label is treated as unresolved/import review, not a normal category.",
+    reasonKey: "import.aliasUnresolved",
   },
   AI: {
     suggestedCategory: "訂閱 > AI",
     suggestedEvent: null,
     suggestedTag: null,
-    reason: "AI is a subscription child category and still needs user confirmation.",
+    reasonKey: "import.aliasAi",
   },
   登山: {
     suggestedCategory: "旅行活動",
     suggestedEvent: "登山",
     suggestedTag: "登山",
-    reason: "Use an event or tag for the activity; keep reporting categories specific.",
+    reasonKey: "import.aliasActivity",
   },
   浪費: {
     suggestedCategory: null,
     suggestedEvent: null,
     suggestedTag: "浪費",
-    reason: "Prefer this emotional/context label as a tag rather than a reporting category.",
+    reasonKey: "import.aliasTag",
   },
 };
 
@@ -51,7 +57,14 @@ export function classifyCategoryAlias(value: string): CategoryAliasReview {
   const alias = ambiguousAliases[input];
 
   if (alias) {
-    return { input, status: "review", ...alias };
+    return {
+      input,
+      status: "review",
+      suggestedCategory: alias.suggestedCategory,
+      suggestedEvent: alias.suggestedEvent,
+      suggestedTag: alias.suggestedTag,
+      reason: t(alias.reasonKey),
+    };
   }
 
   if (!input) {
@@ -61,7 +74,7 @@ export function classifyCategoryAlias(value: string): CategoryAliasReview {
       suggestedCategory: "缺漏支出",
       suggestedEvent: null,
       suggestedTag: null,
-      reason: "Category is missing and must be confirmed during import review.",
+      reason: t("import.aliasEmpty"),
     };
   }
 
@@ -71,7 +84,7 @@ export function classifyCategoryAlias(value: string): CategoryAliasReview {
     suggestedCategory: input,
     suggestedEvent: null,
     suggestedTag: null,
-    reason: "Existing category label can continue to review.",
+    reason: t("import.aliasAccepted"),
   };
 }
 
@@ -81,6 +94,6 @@ export function categoryReviewSummary(value: string): string | null {
     return null;
   }
 
-  const suggestion = review.suggestedCategory ? ` Suggested: ${review.suggestedCategory}.` : "";
-  return `${review.input || "(blank)"} requires review.${suggestion} ${review.reason}`;
+  const suggestion = review.suggestedCategory ? t("import.suggestion", { category: review.suggestedCategory }) : "";
+  return `${t("import.reviewNeeded", { input: review.input || t("common.blankName") })}${suggestion}${review.reason}`;
 }

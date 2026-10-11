@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { parseMinorUnits } from "../manualLedger/money";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalAuditEvent, LocalLedgerRecord } from "../manualLedger/records";
@@ -57,7 +58,7 @@ function reference(
   const remoteId = values?.[localId];
   return remoteId
     ? { ok: true, value: remoteId }
-    : { ok: false, issues: [issue("missing-reference", field, `No cloud reference was resolved for ${localId}.`)] };
+    : { ok: false, issues: [issue("missing-reference", field, t("cloud.mappingNoReference", { id: localId }))] };
 }
 
 function ledgerReference(
@@ -69,13 +70,13 @@ function ledgerReference(
   const remoteId = values?.[localId] ?? (isUuid(localId) ? localId : stableCloudUuid(`ledger:${userId}:${localId}`));
   return remoteId
     ? { ok: true, value: remoteId }
-    : { ok: false, issues: [issue("missing-reference", field, `No cloud reference was resolved for ${localId}.`)] };
+    : { ok: false, issues: [issue("missing-reference", field, t("cloud.mappingNoReference", { id: localId }))] };
 }
 
 function money(value: string, currency: string, field: string, positive = false): CloudMappingResult<string> {
   const minorUnits = parseMinorUnits(value, currency);
   if (minorUnits === null || (positive && minorUnits <= 0n)) {
-    return { ok: false, issues: [issue("invalid-money", field, `${field} is not valid for ${currency}.`)] };
+    return { ok: false, issues: [issue("invalid-money", field, t("cloud.mappingInvalidMoney", { field, currency }))] };
   }
   return { ok: true, value: minorUnits.toString() };
 }
@@ -161,7 +162,7 @@ export function mapMealEntry(
 ): CloudMappingResult<CloudMealBundle> {
   const mealDate = new Date(meal.occurredAt);
   if (!Number.isFinite(mealDate.getTime())) {
-    return { ok: false, issues: [issue("invalid-date", "meal.occurredAt", "Meal time is not a valid date.")] };
+    return { ok: false, issues: [issue("invalid-date", "meal.occurredAt", t("cloud.mappingIssueDate"))] };
   }
 
   const mealId = stableCloudUuid(`meal:${userId}:${meal.id}`);
@@ -352,7 +353,7 @@ function mapRefundLinks(
     linkedIds.push(record.refundLinkedRecordId);
   }
   if (linkedIds.length !== 1) {
-    return { ok: false, issues: [issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple refund links require explicit per-record amounts.")] };
+    return { ok: false, issues: [issue("missing-refund-allocation", "refundLinkedRecordIds", t("cloud.mappingRefundAllocation"))] };
   }
 
   const originalId = ledgerReference(references.ledgerRecordIds, linkedIds[0], userId, "original_record_id");

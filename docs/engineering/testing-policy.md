@@ -19,10 +19,11 @@ and do not restate the mapping.
 - **Local and CI** — the repository convention is minimal CI: GitHub Actions
   runs only `policy.yml` and `test.yml` (see `frontend-hosting.md`). The
   `Tests` workflow (`.github/workflows/test.yml`) runs `npm run typecheck`,
-  `npm run build`, and `npm test` — the exact `package.json` scripts
-  developers run locally — so local and CI verification use the same
-  commands by construction. If more test steps are ever added, they must
-  invoke these same scripts, not duplicate them.
+  `npm run build`, and `npm test` in its `test` job, and `npm run test:e2e`
+  (with Chromium installed as a step of its own) in its `e2e` job — the exact
+  `package.json` scripts developers run locally — so local and CI
+  verification use the same commands by construction. If more test steps are
+  ever added, they must invoke these same scripts, not duplicate them.
 
 ## Required verification per change area
 
@@ -37,6 +38,9 @@ and do not restate the mapping.
 | Media / privacy / R2 | Ownership, retention, and export-exclusion checks; signed upload URLs never expose R2 secrets |
 | Sync / offline | Idempotency, conflict, and no-silent-overwrite checks (see `pr-review-checklist.md`) |
 | UI shell / frontend | `npm run build` plus the browser smoke test (checklist in `development-workflow.md`) and a console-error check |
+| User-facing text / i18n keys | Both dictionaries define every key `src/` uses: `src/i18n/dictionaries.test.ts` scans the call sites and names each missing key. A key that resolves to `[missing:key]` in dev, or to the bare key in a build, is a defect rather than a fallback |
+| Ledger row layout / narrow containers | Container-width layout sweep in `tests/e2e/ledger-layout.spec.ts`, and the same sweep with long names / three currencies / extreme widths in `tests/e2e/ledger-hostile-content.spec.ts`; see [Visual Regression for Layout](../testing/visual-regression.md) |
+| An amount shown to the user | Every surface formats through `formatAmount` (`src/manualLedger/money.ts`) — row amounts included, not just totals. `src/App.test.tsx` and the hostile-content sweep assert that a one-record section's row amount appears verbatim in its subtotal, so a row and the total above it cannot print the same number two ways |
 | Docs-only | Link check or reviewer walkthrough |
 
 ## When to run which command
@@ -50,6 +54,7 @@ and do not restate the mapping.
 | Edge Function handler tests | `npm run test:edge` |
 | Remote persistence smoke (needs `.env.local`) | `npm run test:remote` |
 | End-to-end (Playwright, port 4174) | `npm run test:e2e` |
+| Layout / visual regression of one surface | `npx playwright test tests/e2e/ledger-layout.spec.ts tests/e2e/ledger-hostile-content.spec.ts` ([details](../testing/visual-regression.md)) |
 | Production build | `npm run build` (runs `tsc -b` then `vite build`) |
 
 In CI, the `Tests` workflow (`.github/workflows/test.yml`) runs `npm run

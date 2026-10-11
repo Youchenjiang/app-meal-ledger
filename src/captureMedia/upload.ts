@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export const MAX_MEDIA_FILES = 20;
 export const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
 
@@ -30,11 +32,11 @@ export type UploadBatchValidation = {
 export function validateMediaBatch(files: readonly UploadFileLike[]): UploadBatchValidation {
   const totalBytes = files.reduce((total, file) => total + file.size, 0);
   if (files.length > MAX_MEDIA_FILES) {
-    return { ok: false, totalBytes, error: `Select at most ${MAX_MEDIA_FILES} files at a time.` };
+    return { ok: false, totalBytes, error: t("upload.maxFiles", { max: MAX_MEDIA_FILES }) };
   }
 
   if (totalBytes > MAX_MEDIA_BYTES) {
-    return { ok: false, totalBytes, error: "The selected files exceed the 100 MB batch limit." };
+    return { ok: false, totalBytes, error: t("upload.batchTooLarge") };
   }
 
   return { ok: true, totalBytes };
@@ -82,7 +84,7 @@ export async function uploadMediaFile(
     return {
       ...item,
       status: "failed",
-      error: error instanceof Error ? error.message : "The upload boundary could not be reached.",
+      error: error instanceof Error ? error.message : t("upload.endpointUnreachable"),
     };
   }
   if (!signed.ok) {
@@ -96,7 +98,7 @@ export async function uploadMediaFile(
       body: file,
     });
     if (!response.ok) {
-      return { ...item, status: "failed", error: `Media upload failed with HTTP ${response.status}.` };
+      return { ...item, status: "failed", error: t("upload.httpFailed", { status: response.status }) };
     }
     return {
       ...item,
@@ -112,7 +114,7 @@ export async function uploadMediaFile(
     return {
       ...item,
       status: "failed",
-      error: error instanceof Error ? error.message : "Media upload failed.",
+      error: error instanceof Error ? error.message : t("upload.mediaFailed"),
     };
   }
 }
@@ -130,7 +132,7 @@ export async function requestSignedUpload(
   }
 
   if (!data || typeof data !== "object" || !("mediaId" in data) || !("putUrl" in data) || !("objectKey" in data) || !("expiresInSeconds" in data)) {
-    return { ok: false, error: "The upload boundary returned an invalid response." };
+    return { ok: false, error: t("upload.invalidResponse") };
   }
 
   return { ok: true, value: data as SignedUploadResult };

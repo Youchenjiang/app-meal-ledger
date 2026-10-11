@@ -91,6 +91,17 @@ Test navigation is usable at mobile width.
 
 Test navigation is usable at desktop width.
 
+Test the bar keeps one shape at 320, 390, 1000, and 1440px: pinned to the bottom
+edge, spanning the viewport, five equal-width items on one row sharing a single
+icon row, no caption laid out as visible text, every item still reachable by its
+name (the captions are the accessible names), the center 新增 a raised circle that
+breaks the bar's top edge without covering the glyphs beside it, and the content
+column centred with clearance for the bar.
+
+Test the center 新增 button stays raised and dominant in both themes: the circle is
+legible against the bar, its "+" is larger and heavier than a flat item's icon, and
+the dark theme draws a solid ring that separates it from the near-black bar.
+
 ## State Indicators
 
 Test unauthenticated state opens the local-only workspace without requiring sign-in.

@@ -52,9 +52,9 @@ describe("manual transaction drafts", () => {
   test("accepts fixed missing-value labels but rejects arbitrary replacements", () => {
     const missingExpense = {
       ...completeExpense,
-      counterparty: "Merchant unavailable",
+      counterparty: "商家不詳",
       counterpartyMissing: true,
-      itemName: "Item unavailable",
+      itemName: "品項不詳",
       itemNameMissing: true,
     };
 
