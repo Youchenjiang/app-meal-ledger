@@ -2469,7 +2469,10 @@ h2 {
    The queries are on the row's container, so a narrow panel on a wide screen and
    a narrow phone behave the same way. */
 
-/* Two lines: the meta moves under the name. */
+/* Two lines: the meta moves under the name. The column gap is tightened from
+   the one-line tier's value: below this width every pixel between columns is
+   taken from the account · category line, which on the CI (Linux) metrics is
+   the widest the row has to hold. */
 @container ledger-rows (max-width: 449px) {
   .ledger-record-card {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -2477,6 +2480,7 @@ h2 {
       "date name amount actions"
       "date meta status actions";
     row-gap: 1px;
+    column-gap: 2px;
   }
 }
 
@@ -2490,6 +2494,7 @@ h2 {
       "date meta   status"
       "date amount amount";
     row-gap: 1px;
+    column-gap: 2px;
   }
 }
 
@@ -2505,6 +2510,7 @@ h2 {
         "date name amount actions"
         "date meta status actions";
       row-gap: 1px;
+      column-gap: 2px;
     }
   }
 
@@ -2516,6 +2522,7 @@ h2 {
         "date meta   status"
         "date amount amount";
       row-gap: 1px;
+      column-gap: 2px;
     }
   }
 }
