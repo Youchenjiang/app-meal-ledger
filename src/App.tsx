@@ -860,21 +860,25 @@ function BottomNav({ route, reviewCount, navigate }: Readonly<{
   const { t: translate } = useI18n();
   return (
     <nav className="bottom-nav" aria-label={translate("nav.navAria")}>
-      <div className="nav-brand">
-        <Brand caption={translate("nav.brandCaption")} />
-      </div>
       {navItems.map((item) => {
         const Icon = item.icon;
+        // The bar is icon-only, so every glyph carries its item alone and the
+        // caption below is the accessible name rather than a visible label. The
+        // center 新增 button is the raised FAB (ADR 0006), drawn larger and
+        // heavier than the flat items beside it.
+        const isCreate = item.route === "capture";
         return (
           <button
-            className={`nav-item nav-item-${item.route} ${route === item.route ? "active" : ""} ${item.route === "capture" ? "nav-create" : ""}`}
+            className={`nav-item nav-item-${item.route} ${route === item.route ? "active" : ""} ${isCreate ? "nav-create" : ""}`}
             key={item.route}
             type="button"
             aria-current={route === item.route ? "page" : undefined}
             onClick={() => navigate(item)}
           >
-            <span className="nav-icon" aria-hidden="true"><Icon size={20} /></span>
-            <span>{translate(item.labelKey)}</span>
+            <span className="nav-icon" aria-hidden="true">
+              <Icon size={isCreate ? 26 : 24} strokeWidth={isCreate ? 2.5 : 2} />
+            </span>
+            <span className="nav-caption">{translate(item.labelKey)}</span>
             {item.route === "ledger" && reviewCount > 0 ? (
               <>
                 <span className="nav-badge" aria-hidden="true">{reviewCount}</span>
@@ -996,10 +1000,9 @@ function AuthenticatedApp() {
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   // Which capture mode the 新增 header switch shows; shared with the panel.
-  // 新增 defaults to 逐欄口說: the approved wireframe flow fills fields one at
-  // a time and degrades to raw input when AI is unreachable, while 整段口說
-  // needs the AI proxy for its free-text parse.
-  const [voiceCaptureMode, setVoiceCaptureMode] = useState<"a" | "b">("b");
+  // Defaults to 整段口說 (mode A): like modern voice apps (Voinance/念帳),
+  // users want to speak one sentence and let AI extract all fields into a review card.
+  const [voiceCaptureMode, setVoiceCaptureMode] = useState<"a" | "b">("a");
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
   const [cloudSyncQueue, setCloudSyncQueue] = useState<CloudSyncQueueItem[]>(readStoredCloudSyncQueue);

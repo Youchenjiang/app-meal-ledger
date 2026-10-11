@@ -19,6 +19,34 @@ Primary navigation is a fixed bottom bar used at every viewport width (see
   voice-capture flow; the content feed remains a roadmap item
 - 設定 (Settings) — `/settings`
 
+The bar shows icons only: each item's name is rendered as its accessible name
+rather than a visible label. A caption under the center 新增 item alone read as
+that item *missing* its label instead of as a deliberate FAB, and dropping it
+only there left the captions and the circle fighting for the same strip of the
+bar. With no captions the bar is one icon row tall (`--nav-height`), the five
+glyphs sit centred on it, and every item is named by its clipped `.nav-caption`
+so assistive tech and the UI tests still address 概覽/明細/新增/專區/設定.
+
+The center 新增 button is the shell's only raised element: a circular
+primary-colour button that breaks the bar's top edge, with a larger and heavier
+"+" than the flat items beside it. Its separation from the bar is theme-specific
+(the `--fab-shadow` token) — a green drop shadow reads against the light bar but
+disappears against the dark one, which draws a lighter brand ring instead.
+
+The circle is painted around the item's icon slot (`::before`, sized by
+`--fab-size`) rather than replacing it, so the icon row cannot move when the
+circle changes and the "+" stays centred in it. Its height above the bar is
+`--fab-overhang`, and `--fab-raise` is derived from the circle size, the bar
+height, and that overhang, so changing either keeps the overhang rather than
+silently lifting the circle past the bar. An earlier version absolutely
+positioned the circle and padded the item to compensate, which put the two on
+different lines and let the ring overlap the glyphs.
+
+The bar carries no brand block: five equal-width items leave no room for one, and
+the shell used to keep the wordmark in a desktop-only rail that this decision
+removes. Identity comes from the page-header eyebrow (`nav.brandCaption`), which
+every route already renders at every width.
+
 Desktop keeps the same bottom bar and caps the content area at a readable max
 width instead of switching to a sidebar. Mobile and desktop use the same
 layout with the same route names.

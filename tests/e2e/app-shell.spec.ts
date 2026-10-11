@@ -208,9 +208,12 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   await expect(navigation).toBeVisible();
   await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
   const navBox = await navigation.boundingBox();
+  // A wide window keeps the same bottom bar (ADR 0006): full width, parked on the
+  // bottom edge, short enough to leave the viewport to the content.
   expect(navBox?.x).toBe(0);
-  expect(navBox?.height).toBeGreaterThanOrEqual(899);
-  expect(navBox?.width).toBeGreaterThan(180);
+  expect(Math.round(navBox?.width ?? 0)).toBe(1440);
+  expect(Math.round((navBox?.y ?? 0) + (navBox?.height ?? 0))).toBe(900);
+  expect(navBox?.height).toBeLessThanOrEqual(90);
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -289,63 +292,248 @@ test("keeps the mobile workspace header aligned across routes", async ({ page })
   expect(errors).toEqual([]);
 });
 
-// Above the 900px breakpoint the shell is a left sidebar, not the bottom bar the
-// mobile breakpoint falls back to (see `.bottom-nav` in src/styles.css), so the
-// items share a left edge and stack downwards instead of sharing one row. 設定 is
-// pinned to the bottom of the column on purpose, so the gap between items is not
-// uniform and is deliberately not asserted.
-test("keeps the desktop navigation a full-height left sidebar", async ({ page }) => {
+// ADR 0006 makes the center 新增 button the raised, visually dominant item, and
+// dark is the default theme. This measures what a reader sees rather than the
+// declarations that carry it: on a near-black bar a green circle plus a
+// green-tinted drop shadow read as one flat surface, and the plus was drawn at
+// the same size and weight as the four flat icons beside it.
+test("keeps the center 新增 button raised and dominant in both themes", async ({ page }) => {
   const errors = collectBrowserErrors(page);
-  await page.setViewportSize({ width: 1000, height: 900 });
-
+  await page.setViewportSize({ width: 390, height: 844 });
   await openWorkspace(page);
-  const navigation = page.locator("nav[aria-label='MealLedger 導覽']");
-  await expect(navigation).toBeVisible();
-  const items = await navigation.locator(".nav-item").evaluateAll((elements) =>
-    elements.map((element) => {
-      const box = element.getBoundingClientRect();
-      return {
-        label: (element.textContent ?? "").trim(),
-        left: Math.round(box.left),
-        top: Math.round(box.top),
-        width: Math.round(box.width),
-        height: Math.round(box.height),
+
+  for (const theme of ["dark", "light"] as const) {
+    await page.evaluate((value) => window.localStorage.setItem("mealledger.settings.theme", value), theme);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "概覽", exact: true })).toBeVisible();
+
+    const fab = await page.evaluate(() => {
+      const channel = (value: number) => {
+        const v = value / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
       };
-    }),
-  );
+      const rgba = (value: string) => {
+        const parts = (value.match(/[\d.]+/g) ?? []).map(Number);
+        if (parts.length < 3) throw new Error(`Cannot read colour "${value}"`);
+        return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+      };
+      const luminance = ({ r, g, b }: { r: number; g: number; b: number }) =>
+        0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+      const contrast = (
+        first: { r: number; g: number; b: number },
+        second: { r: number; g: number; b: number },
+      ) => {
+        const a = luminance(first);
+        const b = luminance(second);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      };
+      // A translucent layer is only visible against what it is painted on, so the
+      // shadow is composited over the bar before it is measured.
+      const over = (
+        top: { r: number; g: number; b: number; a: number },
+        bottom: { r: number; g: number; b: number },
+      ) => ({
+        r: top.a * top.r + (1 - top.a) * bottom.r,
+        g: top.a * top.g + (1 - top.a) * bottom.g,
+        b: top.a * top.b + (1 - top.a) * bottom.b,
+      });
 
-  expect(items.map((item) => item.label), "the sidebar lists every route once").toEqual([
-    "概覽",
-    "明細",
-    "新增",
-    "專區",
-    "設定",
-  ]);
-  expect(new Set(items.map((item) => item.left)).size, "every item shares one left edge").toBe(1);
+      const circle = document.querySelector<HTMLElement>(".nav-create .nav-icon");
+      const bar = document.querySelector<HTMLElement>(".bottom-nav");
+      const glyph = circle?.querySelector("svg");
+      const flatGlyph = document.querySelector<HTMLElement>(".nav-item-ledger .nav-icon svg");
+      if (!circle || !bar || !glyph || !flatGlyph) {
+        throw new Error("The bottom bar is missing its FAB or a flat item to compare it with.");
+      }
 
-  const tops = items.map((item) => item.top);
-  expect(tops, "the items stack downwards in DOM order").toEqual([...tops].sort((a, b) => a - b));
-  expect(new Set(tops).size, "no two items sit on one row").toBe(items.length);
+      // The circle is painted by ::before so that its size never moves the caption
+      // under it, so the paint is what has to be measured here, not the 26px icon
+      // box the flat items share.
+      const circleStyle = getComputedStyle(circle, "::before");
+      const barColour = rgba(getComputedStyle(bar).backgroundColor);
+      // The first shadow layer is the ring the dark theme draws around the circle.
+      // Only its colour is read: the layer list itself is comma-separated and so
+      // is every rgb() inside it, which splits a layer into three fake ones.
+      const outermostShadow = rgba(circleStyle.boxShadow.match(/rgba?\([^)]+\)/)?.[0] ?? "");
 
-  // Every nav item is a touch target, per content-ui-restructure-handoff.md §5.2.
-  for (const item of items) {
-    expect(item.height, `${item.label}: touch target height`).toBeGreaterThanOrEqual(44);
-    expect(item.width, `${item.label}: touch target width`).toBeGreaterThanOrEqual(44);
+      return {
+        theme: document.documentElement.dataset.theme,
+        circleWidth: Math.round(Number.parseFloat(circleStyle.width)),
+        glyphWidth: Math.round(glyph.getBoundingClientRect().width),
+        flatGlyphWidth: Math.round(flatGlyph.getBoundingClientRect().width),
+        strokeWidth: Number.parseFloat(getComputedStyle(glyph).strokeWidth),
+        circleContrast: Math.round(contrast(rgba(circleStyle.backgroundColor), barColour) * 100) / 100,
+        ringAlpha: outermostShadow.a,
+        ringContrast: Math.round(contrast(over(outermostShadow, barColour), barColour) * 100) / 100,
+      };
+    });
+
+    expect(fab.theme, "the theme under test is the one that rendered").toBe(theme);
+    expect(fab.circleWidth, `${theme}: the center item is a raised circle`).toBeGreaterThanOrEqual(40);
+    expect(fab.glyphWidth, `${theme}: the FAB plus is larger than a flat item's icon`).toBeGreaterThan(
+      fab.flatGlyphWidth,
+    );
+    expect(fab.strokeWidth, `${theme}: the FAB plus is drawn heavier than a flat item's icon`).toBeGreaterThanOrEqual(2.5);
+    expect(fab.circleContrast, `${theme}: the circle stays a legible object on the bar`).toBeGreaterThanOrEqual(3);
+
+    if (theme === "dark") {
+      // The light theme's soft shadow is plenty against a warm bar; the dark bar
+      // needs a solid edge, otherwise the FAB is a flat green dot again.
+      expect(fab.ringAlpha, "dark: the raised edge is a ring, not a shadow the bar swallows").toBeGreaterThan(0.99);
+      expect(fab.ringContrast, "dark: the ring separates the circle from the bar").toBeGreaterThanOrEqual(3);
+    }
   }
 
-  // A sidebar means the content column starts to the right of the rail. If the
-  // rail ever became a full-width stacked list, the arrangement assertions above
-  // would still hold and only this one would notice.
-  const navigationBox = await navigation.boundingBox();
-  const contentLeft = await page
-    .locator(".page-header")
-    .first()
-    .evaluate((element) => Math.round(element.getBoundingClientRect().left));
-  expect(contentLeft, "the content column sits beside the sidebar").toBeGreaterThanOrEqual(
-    Math.round(navigationBox?.right ?? 0),
-  );
+  expect(errors).toEqual([]);
+});
 
-  await expectNoHorizontalOverflow(page);
+// ADR 0006 keeps one navigation structure at every viewport width: a fixed bottom
+// bar of five equal-width items with the center 新增 raised as a circular button.
+// The shell used to swap in a full-height left sidebar above 900px, so this asserts
+// the same shape on both sides of that retired breakpoint — the previous version of
+// this test asserted the sidebar and would call the ADR violation a pass.
+//
+// The bar renders icons only, so the captions are the accessible names rather than
+// visible labels, and that is the part of this shape a reader cannot see for
+// themselves: every item has to stay reachable by name, and no caption may grow back
+// into a visible label on one item out of five.
+test("keeps one bottom-bar navigation shape at every viewport width", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+
+  for (const width of [320, 390, 1000, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openWorkspace(page);
+
+    // Names come from the clipped captions, so a caption that stops being rendered
+    // (or a button that loses it) drops an item out of this list.
+    for (const name of ["概覽", "明細", "新增", "專區", "設定"]) {
+      await expect(page.getByRole("button", { name }), `${width}px: ${name} is named`).toBeVisible();
+    }
+
+    const report = await page.evaluate(() => {
+      const nav = document.querySelector<HTMLElement>(".bottom-nav");
+      const circle = document.querySelector<HTMLElement>(".nav-create .nav-icon");
+      const items = Array.from(document.querySelectorAll<HTMLElement>(".nav-item"));
+      const captions = Array.from(document.querySelectorAll<HTMLElement>(".nav-caption"));
+      const workspace = document.querySelector<HTMLElement>(".workspace");
+      const header = document.querySelector<HTMLElement>(".page-header");
+      if (!nav || !circle || !workspace || !header || items.length === 0 || captions.length === 0) {
+        throw new Error("The shell is missing part of its navigation.");
+      }
+
+      // `left/top: 50%` puts the painted circle's corner at the icon box's centre
+      // and the transform centres it there before lifting it, so the painted box
+      // is the icon centre plus the resolved translate.
+      const fabStyle = getComputedStyle(circle, "::before");
+      const fabSize = Number.parseFloat(fabStyle.width);
+      const fabShift = new DOMMatrix(fabStyle.transform === "none" ? "" : fabStyle.transform);
+      const iconBox = circle.getBoundingClientRect();
+      const painted = {
+        left: iconBox.left + iconBox.width / 2 + fabShift.m41,
+        top: iconBox.top + iconBox.height / 2 + fabShift.m42,
+        width: fabSize,
+      };
+
+      const navBox = nav.getBoundingClientRect();
+      const workspaceStyle = getComputedStyle(workspace);
+      const workspaceBox = workspace.getBoundingClientRect();
+      return {
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        labels: items.map((item) => (item.textContent ?? "").trim()),
+        itemBoxes: items.map((item) => {
+          const box = item.getBoundingClientRect();
+          return { top: Math.round(box.top), width: Math.round(box.width), height: Math.round(box.height) };
+        }),
+        nav: {
+          left: Math.round(navBox.left),
+          right: Math.round(navBox.right),
+          top: Math.round(navBox.top),
+          bottom: Math.round(navBox.bottom),
+        },
+        circle: {
+          width: Math.round(painted.width),
+          top: Math.round(painted.top),
+          bottom: Math.round(painted.top + painted.width),
+        },
+        iconTops: items.map((item) =>
+          Math.round(item.querySelector(".nav-icon")!.getBoundingClientRect().top),
+        ),
+        captionBoxes: captions.map((caption) => {
+          const box = caption.getBoundingClientRect();
+          return { width: Math.round(box.width), height: Math.round(box.height) };
+        }),
+        workspace: {
+          left: Math.round(workspaceBox.left),
+          width: Math.round(workspaceBox.width),
+          paddingLeft: Math.round(Number.parseFloat(workspaceStyle.paddingLeft)),
+          paddingBottom: Math.round(Number.parseFloat(workspaceStyle.paddingBottom)),
+        },
+        headerLeft: Math.round(header.getBoundingClientRect().left),
+      };
+    });
+
+    const label = `${width}px`;
+    expect(report.labels, `${label}: the bar lists every route once`).toEqual([
+      "概覽",
+      "明細",
+      "新增",
+      "專區",
+      "設定",
+    ]);
+
+    // One fixed bar pinned to the bottom edge and spanning the viewport: never a
+    // rail down the side, never a stacked list that only shares a left edge.
+    expect(report.nav.left, `${label}: the bar starts at the left edge`).toBe(0);
+    expect(report.nav.right, `${label}: the bar reaches the right edge`).toBe(report.viewport.width);
+    expect(report.nav.bottom, `${label}: the bar sits on the bottom edge`).toBe(report.viewport.height);
+    expect(report.viewport.height - report.nav.top, `${label}: bar height`).toBeGreaterThanOrEqual(44);
+
+    // Five equal-width items sharing one row, each still a touch target.
+    expect(new Set(report.itemBoxes.map((box) => box.top)).size, `${label}: one row`).toBe(1);
+    expect(new Set(report.itemBoxes.map((box) => box.width)).size, `${label}: equal widths`).toBe(1);
+    for (const box of report.itemBoxes) {
+      expect(box.height, `${label}: touch target height`).toBeGreaterThanOrEqual(44);
+      expect(box.width, `${label}: touch target width`).toBeGreaterThanOrEqual(44);
+    }
+
+    // The center item stays the raised circle that breaks the bar's top edge.
+    expect(report.circle.width, `${label}: the center item is a circle`).toBeGreaterThanOrEqual(40);
+    expect(report.circle.top, `${label}: the circle breaks the bar's top edge`).toBeLessThan(report.nav.top);
+
+    // Icon-only: the five glyphs sit on one centred row, and no caption is laid
+    // out as visible text — a label under one item out of five read as a missing
+    // label rather than a label, which is why the bar carries none at all.
+    expect(new Set(report.iconTops).size, `${label}: every item shares one icon row`).toBe(1);
+    for (const [index, box] of report.captionBoxes.entries()) {
+      expect(box.width, `${label}: caption ${index} takes no room in the row`).toBeLessThanOrEqual(2);
+      expect(box.height, `${label}: caption ${index} takes no room in the row`).toBeLessThanOrEqual(2);
+    }
+
+    // The circle is the only thing the bar shows besides the icons: it has to keep
+    // rising past the bar's top edge, and it has to stay inside its own column
+    // instead of covering the glyphs beside it.
+    expect(report.nav.top - report.circle.top, `${label}: the FAB is lifted clear of the bar`).toBeGreaterThanOrEqual(14);
+    expect(report.circle.width, `${label}: the circle stays inside its own column`).toBeLessThanOrEqual(
+      Math.min(...report.itemBoxes.map((box) => box.width)),
+    );
+    expect(
+      report.workspace.paddingBottom,
+      `${label}: the content clears the fixed bar and the circle's overhang`,
+    ).toBeGreaterThanOrEqual(report.viewport.height - report.nav.top + 14);
+
+    // Nothing is reserved for a side rail: the capped content column is centred in
+    // the viewport, and the header starts at its padding rather than beside a rail.
+    expect(
+      Math.abs(report.workspace.left - (report.viewport.width - report.workspace.width) / 2),
+      `${label}: the content column is centred`,
+    ).toBeLessThanOrEqual(1);
+    expect(report.headerLeft, `${label}: the header starts inside the content column`).toBe(
+      report.workspace.left + report.workspace.paddingLeft,
+    );
+
+    await expectNoHorizontalOverflow(page);
+  }
+
   expect(errors).toEqual([]);
 });
 
