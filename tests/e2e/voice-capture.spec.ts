@@ -33,18 +33,19 @@ test("switches the voice capture mode from the page header", async ({ page }) =>
   await expect(page.getByRole("tab", { name: "整段口說" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "逐欄口說" })).toBeVisible();
 
-  // 新增 defaults to 逐欄口說 (mode B): the field-by-field panel renders.
-  await expect(page.getByRole("tab", { name: "整段口說" })).toHaveAttribute("aria-selected", "false");
-  await expect(page.getByRole("tab", { name: "逐欄口說" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("第 1 步 · 共 7 步")).toBeVisible();
-
-  // 整段口說 (mode A) swaps in the free-text parse panel.
-  await page.getByRole("tab", { name: "整段口說" }).click();
+  // 新增 defaults to 整段口說 (mode A): the free-text parse panel renders, so a
+  // user can speak one sentence and let the parser fill every field.
+  await expect(page.getByRole("tab", { name: "整段口說" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "逐欄口說" })).toHaveAttribute("aria-selected", "false");
   await expect(page.getByPlaceholder(/例如:7\/25/u)).toBeVisible();
 
-  // Back to 逐欄口說 restores the step panel.
+  // 逐欄口說 (mode B) swaps in the field-by-field step panel.
   await page.getByRole("tab", { name: "逐欄口說" }).click();
   await expect(page.getByText("第 1 步 · 共 7 步")).toBeVisible();
+
+  // Back to 整段口說 restores the free-text panel.
+  await page.getByRole("tab", { name: "整段口說" }).click();
+  await expect(page.getByPlaceholder(/例如:7\/25/u)).toBeVisible();
 
   expect(errors).toEqual([]);
 });
@@ -60,6 +61,9 @@ test("completes a mode B capture from typed fields and saves an official record"
   await expect(page.getByLabel("可用帳戶")).toContainText("Daily wallet");
 
   await openVoiceCapture(page);
+  // 新增 defaults to 整段口說 (mode A); this flow exercises the 逐欄口說 (mode B)
+  // field-by-field capture, so switch to it from the header first.
+  await page.getByRole("tab", { name: "逐欄口說" }).click();
   await expect(page.getByRole("tab", { name: "逐欄口說" })).toHaveAttribute("aria-selected", "true");
 
   // Without an AI key the panel falls back to the raw typed/recognized value;
