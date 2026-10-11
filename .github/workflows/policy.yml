@@ -1,3 +1,27 @@
+# =============================================================================
+# 🚦 Repository Policy & Conventional Commit Gatekeeper (PR 與提交看門狗)
+#
+# 【規則的唯一來源 — Single Source of Truth】
+# 所有規則（type / scope 白名單、標頭長度、模糊主旨、body 格式）只住在
+# `scripts/commit-policy.mjs`。本 workflow 不複製、不重新實作任何規則值，
+# 只負責呼叫同一支腳本：
+#   1. `self-test`            先證明規則引擎本身可信，再拿它當閘門
+#   2. `check-docs`           文件連結 + 「規則值只能存在 canonical 檔」檢查
+#                             （等同本地 `npm run test:docs`）
+#   3. `subject` / `message`  驗證 PR 標題與每一則 commit，與本地
+#                             commit-msg hook 執行的是同一份程式碼
+# 依據：docs/engineering/commit-policy.md。
+#
+# 【附加功能】
+# - 自動指派作者（Author Auto-assign）
+# - 缺少 Label 的軟性提醒
+# - Step Summary 表格：逐項列出檢驗結果與修復指引
+#
+# 【分級報告機制】
+# - ❌ Blocker（硬性錯誤）：規則引擎回報錯誤 -> `core.setFailed()` 阻擋合併
+# - ⚠️ Warning（軟性提醒）：缺 label、自動指派失敗 -> `core.warning()`，不阻擋
+# =============================================================================
+
 name: Repository Policy
 
 on:
@@ -6,11 +30,13 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  # `write` is required only by the author auto-assign step below
+  # (`issues.addAssignees` on the PR). Everything else here is read-only.
+  pull-requests: write
 
 jobs:
-  commit-policy:
-    name: Commit and PR policy
+  conventional-policy:
+    name: PR and Commit Policy Validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,12 +52,12 @@ jobs:
       - name: Docs link and single-source checks
         run: node scripts/check-docs.mjs
 
-      - name: Validate PR title and commit messages
+      - name: Validate PR Title, Commits & Metadata
         uses: actions/github-script@v8
         with:
           script: |
             // The rules live in exactly one file: scripts/commit-policy.mjs.
-            // The local hook (scripts/hooks/commit-msg) and this CI job both
+            // The local hook (scripts/hooks/commit-msg) and this job both
             // execute that file, so local and CI enforcement are identical by
             // construction. See docs/engineering/commit-policy.md.
             const { execFileSync } = require("node:child_process");
@@ -42,14 +68,36 @@ jobs:
                 encoding: "utf8",
               });
 
-            const failures = [];
+            // null when the canonical policy accepts the text, otherwise the
+            // script's own "[COMMIT BLOCKED] ..." explanation verbatim — so a
+            // CI failure reads exactly like the local hook failure.
+            const policyError = (args, input) => {
+              try {
+                runPolicy(args, input);
+                return null;
+              } catch (e) {
+                const text = (e.stderr || e.stdout || "").trim();
+                return text || String(e && e.message);
+              }
+            };
 
-            try {
-              runPolicy(["subject", context.payload.pull_request.title]);
-            } catch (e) {
-              failures.push(`PR title failed policy:\n${(e.stderr || "").trim()}`);
+            const blockers = [];
+            const warnings = [];
+            const summaryRows = [];
+
+            // 1. Check PR Title with the canonical subject rules.
+            const prTitle = context.payload.pull_request.title;
+            const titleError = policyError(["subject", prTitle]);
+            if (titleError) {
+              blockers.push({ target: "PR Title", text: prTitle, issues: titleError });
+              summaryRows.push(["PR Title", `\`${prTitle}\``, "❌ Failed", titleError.replace(/\n/g, "<br>")]);
+            } else {
+              summaryRows.push(["PR Title", `\`${prTitle}\``, "✅ Passed", "-"]);
             }
 
+            // 2. Check every commit in the PR with the canonical message rules
+            //    (subject + body). Merge / revert / fixup commits are not
+            //    policy subjects, so they are listed and skipped.
             const commits = await github.paginate(github.rest.pulls.listCommits, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -57,16 +105,63 @@ jobs:
               per_page: 100,
             });
 
-            for (const commit of commits) {
-              try {
-                runPolicy(["message"], commit.commit.message);
-              } catch (e) {
-                failures.push(
-                  `Commit ${commit.sha.slice(0, 7)} failed policy:\n${(e.stderr || "").trim()}`,
-                );
+            for (const c of commits) {
+              const shaShort = c.sha.slice(0, 7);
+              const message = c.commit.message || "";
+              const firstLine = message.split("\n")[0].trim();
+
+              if (/^(Merge|Revert|fixup!|squash!)/.test(firstLine)) {
+                summaryRows.push([`Commit ${shaShort}`, `\`${firstLine}\``, "⚪ Ignored", "Merge / revert / fixup commit"]);
+                continue;
+              }
+
+              const commitError = policyError(["message"], message);
+              if (commitError) {
+                blockers.push({ target: `Commit ${shaShort}`, text: firstLine, issues: commitError });
+                summaryRows.push([`Commit ${shaShort}`, `\`${firstLine}\``, "❌ Failed", commitError.replace(/\n/g, "<br>")]);
+              } else {
+                summaryRows.push([`Commit ${shaShort}`, `\`${firstLine}\``, "✅ Passed", "-"]);
               }
             }
 
-            if (failures.length > 0) {
-              core.setFailed(failures.join("\n\n"));
+            // 3. Check metadata (warnings only, non-blocking).
+            const pr = context.payload.pull_request;
+            if (!pr.assignees || pr.assignees.length === 0) {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  assignees: [pr.user.login],
+                });
+              } catch (err) {
+                warnings.push(`Auto-assign author failed: ${err.message}`);
+              }
+            }
+
+            if (!pr.labels || pr.labels.length === 0) {
+              warnings.push("No labels attached to PR. Please add a relevant scope/type label.");
+            }
+
+            // 4. Output the summary table.
+            await core.summary
+              .addHeading("📋 Repository Policy Validation Summary", 2)
+              .addTable([
+                [{ data: "Item", header: true }, { data: "Subject", header: true }, { data: "Status", header: true }, { data: "Details", header: true }],
+                ...summaryRows,
+              ])
+              .write();
+
+            if (warnings.length > 0) {
+              for (const w of warnings) {
+                core.warning(`[Policy Warning] ${w}`);
+              }
+            }
+
+            // 5. Hard fail only on blocker errors.
+            if (blockers.length > 0) {
+              for (const b of blockers) {
+                core.error(`[Policy Blocker] ${b.target}: ${b.issues}\n  Subject: "${b.text}"`);
+              }
+              core.setFailed(`Repository policy check failed with ${blockers.length} blocking error(s). Review the Step Summary table above for details.`);
             }
